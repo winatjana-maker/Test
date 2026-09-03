@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1b2a1e">
+<title>Cordwood</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="ledger"></div>
+  <div id="toast" class="hidden"></div>
+  <div id="hint"></div>
+  <div id="bottombar">
+    <button id="btn-build" class="btn primary">Build</button>
+    <button id="btn-menu" class="btn">Menu</button>
+  </div>
+</div>
+
+<div id="panel" class="sheet hidden"></div>
+<div id="modal" class="modal hidden"></div>
+
+<script src="js/config.js"></script>
+<script src="js/iso.js"></script>
+<script src="js/state.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/render.js"></script>
+<script src="js/input.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
