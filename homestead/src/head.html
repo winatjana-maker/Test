@@ -67,7 +67,7 @@
   .hint {
     position: fixed;
     left: 50%;
-    top: calc(106px + env(safe-area-inset-top, 0px));
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     background: rgba(43,42,34,.72);
     color: var(--paper);
@@ -79,6 +79,99 @@
     text-align: center;
     pointer-events: none;
     transition: opacity .6s;
+  }
+  /* mini map, under the test button */
+  .map {
+    position: fixed;
+    top: calc(58px + env(safe-area-inset-top, 0px));
+    right: 16px;
+    width: 110px;
+    height: 110px;
+    border-radius: 12px;
+    border: 2px solid var(--paper);
+    box-shadow: 0 3px 0 rgba(0,0,0,.18);
+    cursor: pointer;
+  }
+  .map.big { width: 240px; height: 240px; }
+  /* contract + goal card, under the chips */
+  .goals {
+    position: fixed;
+    top: calc(108px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 140px;
+    max-width: 360px;
+    background: rgba(43,42,34,.82);
+    color: var(--paper);
+    border-radius: 12px;
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.35;
+    display: grid;
+    gap: 4px;
+    pointer-events: none;
+  }
+  .goals b { color: #fff3a6; font-weight: 600; margin-right: 4px; }
+  .goals .rw { color: #a8e6b0; font-weight: 600; }
+  .goals .bar { height: 5px; border-radius: 3px; background: rgba(255,250,240,.2); overflow: hidden; }
+  .goals .bar i { display: block; height: 100%; background: #7fe08a; }
+  /* upgrade panel: opens while you stand on a group tile */
+  .panel {
+    position: fixed;
+    top: calc(108px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 16px;
+    max-width: 420px;
+    max-height: calc(52vh - env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 16px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.2);
+    padding: 10px 12px 12px;
+  }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-bottom: 6px; }
+  .panel-head h2 { margin: 0; font-size: 18px; font-weight: 600; text-wrap: balance; }
+  .panel-head span { font-size: 12px; color: #7a7466; }
+  .up { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #ece3d0; }
+  .up-text { flex: 1; min-width: 0; }
+  .up-name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .up-note { font-size: 13px; color: #6b6558; }
+  .up.done .up-name { color: #4f7a36; }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 7px; height: 7px; border-radius: 50%; background: #e2d8c3; }
+  .dots i.on { background: #3f9d4f; }
+  .up button {
+    font: 600 15px var(--font-ui);
+    color: var(--paper);
+    background: var(--cash);
+    border: 0;
+    border-radius: 10px;
+    padding: 8px 12px;
+    min-width: 84px;
+    box-shadow: 0 3px 0 #2c7238;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  .up button:disabled { background: #b9b2a2; box-shadow: 0 3px 0 #9a9384; cursor: default; }
+  .up button:not(:disabled):active { transform: translateY(2px); box-shadow: none; }
+  .up button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .maxed, .locked { font-size: 13px; font-weight: 600; min-width: 84px; text-align: center; color: #4f7a36; }
+  .locked { color: #8a8374; }
+  .toast {
+    position: fixed;
+    left: 50%;
+    top: 38%;
+    transform: translateX(-50%);
+    background: #2b2a22;
+    color: #fff3a6;
+    font-size: 17px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 14px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.25);
+    max-width: calc(100% - 32px);
+    text-align: center;
+    pointer-events: none;
   }
 </style>
 
@@ -102,5 +195,12 @@
   </div>
 </div>
 <button class="test-cash" id="test-cash" type="button" title="Testing only: adds $100">+$100 test</button>
+<canvas class="map" id="map" title="Map: tap to make it bigger"></canvas>
+<div class="goals" id="goals" hidden></div>
+<div class="panel" id="panel" hidden>
+  <div class="panel-head"><h2 id="panel-title">Upgrades</h2><span>Step off to close</span></div>
+  <div id="panel-list"></div>
+</div>
+<div class="toast" id="toast" hidden></div>
 <div class="hint" id="hint">Touch the bottom left to move · Chop trees · Restock · Grab the cash</div>
 

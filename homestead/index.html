@@ -67,7 +67,7 @@
   .hint {
     position: fixed;
     left: 50%;
-    top: calc(106px + env(safe-area-inset-top, 0px));
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     background: rgba(43,42,34,.72);
     color: var(--paper);
@@ -79,6 +79,99 @@
     text-align: center;
     pointer-events: none;
     transition: opacity .6s;
+  }
+  /* mini map, under the test button */
+  .map {
+    position: fixed;
+    top: calc(58px + env(safe-area-inset-top, 0px));
+    right: 16px;
+    width: 110px;
+    height: 110px;
+    border-radius: 12px;
+    border: 2px solid var(--paper);
+    box-shadow: 0 3px 0 rgba(0,0,0,.18);
+    cursor: pointer;
+  }
+  .map.big { width: 240px; height: 240px; }
+  /* contract + goal card, under the chips */
+  .goals {
+    position: fixed;
+    top: calc(108px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 140px;
+    max-width: 360px;
+    background: rgba(43,42,34,.82);
+    color: var(--paper);
+    border-radius: 12px;
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.35;
+    display: grid;
+    gap: 4px;
+    pointer-events: none;
+  }
+  .goals b { color: #fff3a6; font-weight: 600; margin-right: 4px; }
+  .goals .rw { color: #a8e6b0; font-weight: 600; }
+  .goals .bar { height: 5px; border-radius: 3px; background: rgba(255,250,240,.2); overflow: hidden; }
+  .goals .bar i { display: block; height: 100%; background: #7fe08a; }
+  /* upgrade panel: opens while you stand on a group tile */
+  .panel {
+    position: fixed;
+    top: calc(108px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 16px;
+    max-width: 420px;
+    max-height: calc(52vh - env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 16px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.2);
+    padding: 10px 12px 12px;
+  }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-bottom: 6px; }
+  .panel-head h2 { margin: 0; font-size: 18px; font-weight: 600; text-wrap: balance; }
+  .panel-head span { font-size: 12px; color: #7a7466; }
+  .up { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #ece3d0; }
+  .up-text { flex: 1; min-width: 0; }
+  .up-name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .up-note { font-size: 13px; color: #6b6558; }
+  .up.done .up-name { color: #4f7a36; }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 7px; height: 7px; border-radius: 50%; background: #e2d8c3; }
+  .dots i.on { background: #3f9d4f; }
+  .up button {
+    font: 600 15px var(--font-ui);
+    color: var(--paper);
+    background: var(--cash);
+    border: 0;
+    border-radius: 10px;
+    padding: 8px 12px;
+    min-width: 84px;
+    box-shadow: 0 3px 0 #2c7238;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  .up button:disabled { background: #b9b2a2; box-shadow: 0 3px 0 #9a9384; cursor: default; }
+  .up button:not(:disabled):active { transform: translateY(2px); box-shadow: none; }
+  .up button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .maxed, .locked { font-size: 13px; font-weight: 600; min-width: 84px; text-align: center; color: #4f7a36; }
+  .locked { color: #8a8374; }
+  .toast {
+    position: fixed;
+    left: 50%;
+    top: 38%;
+    transform: translateX(-50%);
+    background: #2b2a22;
+    color: #fff3a6;
+    font-size: 17px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 14px;
+    box-shadow: 0 6px 0 rgba(0,0,0,.25);
+    max-width: calc(100% - 32px);
+    text-align: center;
+    pointer-events: none;
   }
 </style>
 
@@ -102,6 +195,13 @@
   </div>
 </div>
 <button class="test-cash" id="test-cash" type="button" title="Testing only: adds $100">+$100 test</button>
+<canvas class="map" id="map" title="Map: tap to make it bigger"></canvas>
+<div class="goals" id="goals" hidden></div>
+<div class="panel" id="panel" hidden>
+  <div class="panel-head"><h2 id="panel-title">Upgrades</h2><span>Step off to close</span></div>
+  <div id="panel-list"></div>
+</div>
+<div class="toast" id="toast" hidden></div>
 <div class="hint" id="hint">Touch the bottom left to move · Chop trees · Restock · Grab the cash</div>
 
 <script>
@@ -111,6 +211,9 @@
   const hint = document.getElementById('hint');
   const ui = {
     rate: document.getElementById('n-rate'),
+    goals: document.getElementById('goals'), toast: document.getElementById('toast'),
+    panel: document.getElementById('panel'), panelTitle: document.getElementById('panel-title'), panelList: document.getElementById('panel-list'),
+    map: document.getElementById('map'),
     logs: document.getElementById('n-logs'), sap: document.getElementById('n-sap'), cash: document.getElementById('n-cash'),
     chipLogs: document.getElementById('chip-logs'), chipSap: document.getElementById('chip-sap'), chipCash: document.getElementById('chip-cash'),
   };
@@ -137,9 +240,10 @@
     redwood: { item: 'redwood', hp: 12, r: 28, mult: 2 },
   };
   const LOGS = ['wood', 'oak', 'redwood'];
-  const ITEM_NAME = { wood: 'Pine', oak: 'Oak', redwood: 'Redwood', plank: 'Planks', syrup: 'Syrup', sap: 'Sap', chair: 'Chairs', table: 'Tables' };
+  const ITEM_NAME = { wood: 'Pine', oak: 'Oak', redwood: 'Redwood', plank: 'Planks', syrup: 'Syrup', sap: 'Sap', chair: 'Chairs', table: 'Tables',
+    chips: 'Wood chips', water: 'Water', paper: 'Paper', pellets: 'Pellets', charcoal: 'Charcoal' };
   const PLANKS_PER = { wood: 1, oak: 2, redwood: 4 };            // sawmill yield per log
-  const PRICE = { wood: 2, oak: 4, plank: 6, syrup: 12, redwood: 10, chair: 45, table: 90 };
+  const PRICE = { wood: 2, oak: 4, plank: 6, syrup: 12, redwood: 10, chair: 45, table: 90, paper: 15, pellets: 8, charcoal: 7 };
   const SHOP = ['wood', 'oak', 'plank', 'syrup'];                 // what the counter sells, left to right
 
   // ---------- Layout (world units, relative to the store) ----------
@@ -174,6 +278,7 @@
     reserve: { name: 'Redwood Reserve', x0: CX - 520, x1: CX + 520, y0: CY - 2070, y1: CY - 1600, ground: '#6e8f4a' },
     east: { name: 'Furniture District', x0: CX + 1600, x1: CX + 2080, y0: CY - 430, y1: CY + 430, ground: '#cdb98f' },
     rail: { name: 'Rail Yard', x0: CX - 1450, x1: CX - 150, y0: CY + 1600, y1: CY + 2080, ground: '#b3a892' },
+    industry: { name: 'Industrial Park', x0: CX + 200, x1: CX + 1500, y0: CY + 1220, y1: CY + 1660, ground: '#a9a59a' },
   };
   // dirt roads through the forest to each district (trees never grow on them)
   const ROADS = [
@@ -181,7 +286,14 @@
     { x0: CX + 1100, x1: CX + 1600, y0: CY - 60, y1: CY + 60 },
     { x0: CX - 870, x1: CX - 730, y0: CY + 1160, y1: CY + 1600 },
     { x0: CX + 1990, x1: CX + 2090, y0: CY + 430, y1: CY + 1100 },
+    { x0: CX + 730, x1: CX + 870, y0: CY + 1080, y1: CY + 1230 },
   ];
+  const GEN = { x: CX + 420, front: CY + 1510, w: 190, d: 100 };
+  const MILL = { x: CX + 760, front: CY + 1520, w: 230, d: 110 };
+  const POND = P(1090, 1400);
+  const PUMP = { x: CX + 1090, front: CY + 1560, w: 100, d: 60 };
+  const KILN = { x: CX + 1360, front: CY + 1520, w: 180, d: 100 };
+  const DEPOT = { x: CX + 420, front: CY + 1632, w: 240, d: 90 };
   const RESERVE = { x: CX, y: CY - 1835, cols: 8, gap: 115 };
   const WORKSHOP = { x: CX + 1740, front: CY - 80, w: 220, d: 110 };
   const SHOWROOM = { x: CX + 1880, front: CY + 170, w: 190, d: 110 };
@@ -191,72 +303,76 @@
   const BILLBOARD = P(330, 700);
 
   // ---------- Upgrades (pay by standing on the tile) ----------
+  // Every upgrade belongs to a group. Each group has one tile on the ground; stand on it and its
+  // upgrades open in a panel where you choose what to buy.
   const UPGRADES = [
     // you
-    { id: 'run', name: 'Run Speed', ...P(-520, 210), costs: [15, 45, 100, 500, 1200], note: 'Move faster' },
-    { id: 'swing', name: 'Faster Swing', ...P(-370, 210), costs: [10, 35, 90, 400], note: 'Gather faster' },
-    { id: 'tools', name: 'Better Tools', ...P(-220, 210), costs: [25, 70, 160, 600, 1500], note: '+1 per hit' },
-    { id: 'price', name: 'Better Prices', ...P(-70, 210), costs: [40, 110, 250, 800, 2000], note: '+$1 per item' },
-    // staff and machines
-    { id: 'cashier', name: 'Cashier', hire: 'Hire Cashier', ...P(-520, 480), costs: [30, 80, 180, 600], note: 'Serve customers faster' },
-    { id: 'lumber', name: 'Lumber Bot', hire: 'Buy Lumber Bot', ...P(-370, 480), costs: [150, 220, 400, 1200],
-      note: 'Chops & restocks logs', more: 'Faster, carries more' },
-    { id: 'tapper', name: 'Sap Tapper', hire: 'Hire Sap Tapper', ...P(-220, 480), costs: [200, 350, 600, 1500],
-      note: 'Collects sap for you', more: 'Faster, carries more', needs: 'shack' },
-    { id: 'lane2', name: 'Lane 2', hire: 'Open Lane 2', ...P(-70, 480), costs: [350], note: 'Serve two lines at once' },
-    { id: 'truck', name: 'Logging Truck', hire: 'Buy Logging Truck', ...P(-500, 20), costs: [600, 900, 1500, 4000],
-      note: 'Hauls 40+ logs, loves redwood', more: 'Faster, hauls more' },
-    // facilities: the tile sits by the facility
-    { id: 'store', name: 'Store', hire: 'Expand Store', ...P(320, 170), costs: [120, 350, 800, 2500, 6000], note: 'Bigger orders, more shelf space' },
-    { id: 'farm', name: 'Tree Yard', hire: 'Build Tree Yard', ...P(560, -470), costs: [60, 200, 450, 1500],
-      note: 'Pine & oak that grow back', more: 'More rows, faster growth' },
-    { id: 'grove', name: 'Maple Grove', hire: 'Plant Maple Grove', ...P(1080, -470), costs: [150, 300, 600, 1500, 3000],
-      note: 'Maples drip sap', more: 'More maples, faster sap' },
-    { id: 'shack', name: 'Sugar Shack', hire: 'Build Sugar Shack', ...P(1080, 80), costs: [200, 400, 800, 2000],
-      note: 'Boils sap into syrup', more: 'Boils faster', needs: 'grove' },
-    { id: 'sawmill', name: 'Sawmill', hire: 'Build Sawmill', ...P(720, 150), costs: [250, 500, 900, 2500, 6000],
-      note: 'Logs into planks', more: 'Cuts faster' },
-    { id: 'warehouse', name: 'Warehouse', hire: 'Build Warehouse', ...P(-960, 170), costs: [100, 250, 600, 2000, 5000],
-      note: 'Stores extra logs', more: 'Holds more' },
-    { id: 'forklift', name: 'Forklift', hire: 'Buy Forklift', ...P(-815, 170), costs: [200, 450, 800, 2000, 4000],
-      note: 'Moves pallets inside', more: 'Faster, carries more', needs: 'warehouse' },
-    { id: 'conveyor', name: 'Conveyor', hire: 'Build Conveyor', ...P(-670, 170), costs: [180, 360, 700, 2000, 5000],
-      note: 'Belt to the shelves', more: 'Faster belt', needs: 'warehouse' },
-    { id: 'dock', name: 'Loading Dock', hire: 'Build Loading Dock', ...P(-680, 640), costs: [250, 500, 1500],
-      note: 'Trucks place big orders', more: 'Bigger orders, more often', needs: 'warehouse' },
-    // big business
-    { id: 'fleet', name: 'Bot Fleet', hire: 'Add Lumber Bot', ...P(-520, 770), costs: [1500, 3000, 6000],
-      note: '+1 Lumber Bot', more: '+1 more Lumber Bot', needs: 'lumber' },
-    { id: 'drone', name: 'Cash Drone', hire: 'Buy Cash Drone', ...P(-370, 770), costs: [2500, 5000],
-      note: 'Collects cash for you', more: 'Faster drone' },
-    { id: 'ads', name: 'Billboards', hire: 'Put Up Billboards', ...P(-220, 770), costs: [1200, 3000, 7000],
-      note: 'Customers buy more', more: 'Even bigger orders' },
-    // land deeds, and what you build on them
-    { id: 'reserve', name: 'Redwood Reserve', hire: 'Buy Redwood Reserve', ...P(0, -1490), costs: [3000, 4000, 8000, 16000],
-      note: 'Redwoods that grow back', more: 'More redwoods, faster growth' },
-    { id: 'east', name: 'Furniture District', hire: 'Buy Furniture District', ...P(1490, 0), costs: [5000],
-      note: 'Land for furniture making' },
-    { id: 'workshop', name: 'Workshop', hire: 'Build Workshop', ...P(1700, 90), costs: [2000, 4000, 8000, 16000],
-      note: 'Planks into chairs & tables', more: 'Builds faster', needs: 'east' },
-    { id: 'showroom', name: 'Showroom', hire: 'Build Showroom', ...P(1880, 330), costs: [3000, 6000, 12000],
-      note: 'Rich buyers drive in', more: 'More buyers, bigger buys', needs: 'workshop' },
-    { id: 'rail', name: 'Rail Yard', hire: 'Buy Rail Yard', ...P(-800, 1490), costs: [10000, 15000, 30000, 60000],
-      note: 'Freight trains, huge orders', more: 'More trains, bigger orders' },
-    // logistics: unclog the warehouse
-    { id: 'forkfleet', name: 'Forklift Fleet', hire: 'Add a Forklift', ...P(-520, 1030), costs: [800, 1600, 3200, 6400],
-      note: '+1 forklift working the pallets', more: '+1 more forklift', needs: 'forklift' },
-    { id: 'palletyard', name: 'Pallet Yard', hire: 'Expand Pallet Yard', ...P(-370, 1030), costs: [500, 1500, 4000],
-      note: 'More pallets for overflow', more: 'Even more pallets', needs: 'warehouse' },
-    { id: 'trucks', name: 'Truck Fleet', hire: 'Add Logging Truck', ...P(-220, 1030), costs: [5000, 10000],
-      note: '+1 logging truck', more: '+1 more truck', needs: 'truck' },
-    { id: 'annex', name: 'Warehouse Annex', hire: 'Build Annex', ...P(-1260, 170), costs: [3000, 6000, 12000],
-      note: '+1,500 storage', more: '+more storage', needs: 'warehouse' },
-    { id: 'kiln', name: 'Drying Kiln', hire: 'Build Drying Kiln', ...P(560, 150), costs: [1500, 4000],
-      note: 'Kiln-dried planks sell for +$4', more: 'Planks sell for +$8', needs: 'sawmill' },
-    { id: 'hq', name: 'Head Office', hire: 'Build Head Office', ...P(700, 960), costs: [20000, 50000, 100000],
-      note: '+10% on every sale', more: 'Bigger bonus on every sale' },
+    { id: 'run', group: 'you', name: 'Run Speed', costs: [15, 45, 100, 500, 1200], note: 'Move faster' },
+    { id: 'swing', group: 'you', name: 'Faster Swing', costs: [10, 35, 90, 400], note: 'Chop faster' },
+    { id: 'tools', group: 'you', name: 'Better Tools', costs: [25, 70, 160, 600, 1500], note: '+1 per hit' },
+    // store
+    { id: 'store', group: 'store', name: 'Store Size', hire: 'Expand Store', costs: [120, 350, 800, 2500, 6000], note: 'Bigger orders, more shelf space' },
+    { id: 'price', group: 'store', name: 'Better Prices', costs: [40, 110, 250, 800, 2000], note: '+$1 per item sold' },
+    { id: 'cashier', group: 'store', name: 'Cashier', hire: 'Hire Cashier', costs: [30, 80, 180, 600], note: 'Serve customers faster' },
+    { id: 'lane2', group: 'store', name: 'Lane 2', hire: 'Open Lane 2', costs: [350], note: 'Serve two lines at once' },
+    { id: 'ads', group: 'store', name: 'Billboards', hire: 'Put Up Billboards', costs: [1200, 3000, 7000], note: 'Customers buy more' },
+    // machines
+    { id: 'lumber', group: 'machines', name: 'Lumber Bot', hire: 'Buy Lumber Bot', costs: [150, 220, 400, 1200], note: 'Chops & restocks logs', more: 'Faster, carries more' },
+    { id: 'fleet', group: 'machines', name: 'Bot Fleet', hire: 'Add Lumber Bot', costs: [1500, 3000, 6000], note: '+1 Lumber Bot', needs: 'lumber' },
+    { id: 'truck', group: 'machines', name: 'Logging Truck', hire: 'Buy Logging Truck', costs: [600, 900, 1500, 4000], note: 'Hauls 40+ logs, loves redwood', more: 'Faster, hauls more' },
+    { id: 'trucks', group: 'machines', name: 'Truck Fleet', hire: 'Add Logging Truck', costs: [5000, 10000], note: '+1 logging truck', needs: 'truck' },
+    { id: 'drone', group: 'machines', name: 'Cash Drone', hire: 'Buy Cash Drone', costs: [2500, 5000], note: 'Collects cash for you', more: 'Faster drone' },
+    // tree yard
+    { id: 'farm', group: 'farm', name: 'Tree Yard', hire: 'Build Tree Yard', costs: [60, 200, 450, 1500], note: 'Pine & oak that grow back', more: 'More rows, faster growth' },
+    // maple & syrup
+    { id: 'grove', group: 'maple', name: 'Maple Grove', hire: 'Plant Maple Grove', costs: [150, 300, 600, 1500, 3000], note: 'Maples drip sap', more: 'More maples, faster sap' },
+    { id: 'shack', group: 'maple', name: 'Sugar Shack', hire: 'Build Sugar Shack', costs: [200, 400, 800, 2000], note: 'Boils sap into syrup', more: 'Boils faster', needs: 'grove' },
+    { id: 'tapper', group: 'maple', name: 'Sap Tapper', hire: 'Hire Sap Tapper', costs: [200, 350, 600, 1500], note: 'Collects sap for you', more: 'Faster, carries more', needs: 'shack' },
+    // sawmill
+    { id: 'sawmill', group: 'sawmill', name: 'Sawmill', hire: 'Build Sawmill', costs: [250, 500, 900, 2500, 6000], note: 'Logs into planks (and wood chips)', more: 'Cuts faster' },
+    { id: 'kiln', group: 'sawmill', name: 'Drying Kiln', hire: 'Build Drying Kiln', costs: [1500, 4000], note: 'Planks sell for +$4', more: 'Planks sell for +$8', needs: 'sawmill' },
+    // warehouse & logistics
+    { id: 'warehouse', group: 'warehouse', name: 'Warehouse', hire: 'Build Warehouse', costs: [100, 250, 600, 2000, 5000], note: 'Stores extra logs', more: 'Holds more' },
+    { id: 'forklift', group: 'warehouse', name: 'Forklift', hire: 'Buy Forklift', costs: [200, 450, 800, 2000, 4000], note: 'Moves pallets inside', more: 'Faster, carries more', needs: 'warehouse' },
+    { id: 'forkfleet', group: 'warehouse', name: 'Forklift Fleet', hire: 'Add a Forklift', costs: [800, 1600, 3200, 6400], note: '+1 forklift', needs: 'forklift' },
+    { id: 'palletyard', group: 'warehouse', name: 'Pallet Yard', hire: 'Expand Pallet Yard', costs: [500, 1500, 4000], note: 'More pallets for overflow', needs: 'warehouse' },
+    { id: 'conveyor', group: 'warehouse', name: 'Conveyor', hire: 'Build Conveyor', costs: [180, 360, 700, 2000, 5000], note: 'Belt to the shelves', more: 'Faster belt', needs: 'warehouse' },
+    { id: 'annex', group: 'warehouse', name: 'Warehouse Annex', hire: 'Build Annex', costs: [3000, 6000, 12000], note: '+1,500 storage', more: 'More storage', needs: 'warehouse' },
+    { id: 'dock', group: 'warehouse', name: 'Loading Dock', hire: 'Build Loading Dock', costs: [250, 500, 1500], note: 'Trucks place big orders', more: 'Bigger orders, more often', needs: 'warehouse' },
+    // head office
+    { id: 'hq', group: 'hq', name: 'Head Office', hire: 'Build Head Office', costs: [20000, 50000, 100000], note: '+10% on every sale', more: 'Bigger bonus on every sale' },
+    // land deeds and what you build on them
+    { id: 'reserve', group: 'reserve', name: 'Redwood Reserve', hire: 'Buy Redwood Reserve', costs: [3000, 4000, 8000, 16000], note: 'Redwoods that grow back', more: 'More redwoods, faster growth' },
+    { id: 'east', group: 'east', name: 'Furniture District', hire: 'Buy the land', costs: [5000], note: 'Land for furniture making' },
+    { id: 'workshop', group: 'east', name: 'Workshop', hire: 'Build Workshop', costs: [2000, 4000, 8000, 16000], note: 'Planks into chairs & tables', more: 'Builds faster', needs: 'east' },
+    { id: 'showroom', group: 'east', name: 'Showroom', hire: 'Build Showroom', costs: [3000, 6000, 12000], note: 'Rich buyers drive in', more: 'More buyers, bigger buys', needs: 'workshop' },
+    { id: 'rail', group: 'rail', name: 'Rail Yard', hire: 'Buy Rail Yard', costs: [10000, 15000, 30000, 60000], note: 'Freight trains, huge orders', more: 'More trains, bigger orders' },
+    // industrial park: chips, power, water, paper, charcoal, and the vans that connect it all
+    { id: 'industry', group: 'industry', name: 'Industrial Park', hire: 'Buy the land', costs: [8000], note: 'Land for power, paper & charcoal' },
+    { id: 'depot', group: 'industry', name: 'Van Depot', hire: 'Build Van Depot', costs: [1500], note: 'Delivery vans connect your buildings', needs: 'industry' },
+    { id: 'vans', group: 'industry', name: 'Van Fleet', hire: 'Add a Van', costs: [2500, 5000, 10000, 20000], note: '+1 delivery van', needs: 'depot' },
+    { id: 'vanpro', group: 'industry', name: 'Bigger Vans', hire: 'Upgrade Vans', costs: [2000, 6000, 15000], note: 'Vans carry more and drive faster', needs: 'depot' },
+    { id: 'generator', group: 'industry', name: 'Generator', hire: 'Build Generator', costs: [4000, 10000, 25000], note: 'Burns wood chips; power speeds up machines', more: 'More power per chip', needs: 'industry' },
+    { id: 'pellets', group: 'industry', name: 'Pellet Press', hire: 'Build Pellet Press', costs: [3000, 8000], note: 'Spare chips into pellets (trains buy them)', more: 'Presses faster', needs: 'generator' },
+    { id: 'pump', group: 'industry', name: 'Water Pump', hire: 'Build Water Pump', costs: [2500, 6000, 15000], note: 'Pipes water to the paper mill', more: 'Pumps faster', needs: 'industry' },
+    { id: 'papermill', group: 'industry', name: 'Paper Mill', hire: 'Build Paper Mill', costs: [6000, 15000, 35000], note: 'Chips + water + power → paper', more: 'Makes paper faster', needs: 'industry' },
+    { id: 'charcoal', group: 'industry', name: 'Charcoal Kiln', hire: 'Build Charcoal Kiln', costs: [3000, 8000, 20000], note: 'Oak → charcoal; doubles syrup speed', more: 'Burns faster', needs: 'industry' },
   ];
-  const TILE_SIZE = 88;
+  const GROUPS = [
+    { id: 'you', name: 'Your Skills', ...P(-370, 210) },
+    { id: 'store', name: 'Store', ...P(-70, 210) },
+    { id: 'machines', name: 'Machines', ...P(-370, 480) },
+    { id: 'warehouse', name: 'Warehouse & Logistics', ...P(-815, 170) },
+    { id: 'farm', name: 'Tree Yard', ...P(560, -470) },
+    { id: 'maple', name: 'Maple & Syrup', ...P(1080, -250) },
+    { id: 'sawmill', name: 'Sawmill', ...P(720, 150) },
+    { id: 'hq', name: 'Head Office', ...P(540, 960) },
+    { id: 'industry', name: 'Industrial Park', ...P(800, 1130) },
+    { id: 'reserve', name: 'Redwood Reserve', ...P(0, -1490) },
+    { id: 'east', name: 'Furniture District', ...P(1490, 0) },
+    { id: 'rail', name: 'Rail Yard', ...P(-800, 1490) },
+  ];
+  const TILE_SIZE = 110;
   const level = {}, paid = {};
   for (const u of UPGRADES) { level[u.id] = 0; paid[u.id] = 0; }
   const NAMES = Object.fromEntries(UPGRADES.map(u => [u.id, u.name]));
@@ -271,6 +387,17 @@
   const mainCap = () => [0, 200, 500, 1200, 3000, 5000][level.warehouse];
   const palletCap = () => [40, 120, 300, 600][level.palletyard];
   const incomeMul = () => [1, 1.1, 1.25, 1.5][level.hq];
+  // industrial park numbers
+  const vanCount = () => level.depot ? 1 + level.vans : 0;
+  const vanCap = () => [10, 20, 35, 50][level.vanpro];
+  const vanSpeed = () => [240, 300, 360, 440][level.vanpro];
+  const genCap = () => [0, 40, 80, 150][level.generator];           // power units supplied while fuelled
+  const genBurn = () => [4, 4, 5.5, 7][level.generator];             // seconds per chip at full load
+  const pelletTime = () => [2, 2, 1][level.pellets];
+  const pumpRate = () => [0, 1, 2, 4][level.pump];                   // water per second
+  const paperTime = () => [3, 3, 1.8, 1][level.papermill];            // 2 chips + 1 water → 1 ream
+  const coalTime = () => [4, 4, 2.5, 1.5][level.charcoal];            // 1 oak → 2 charcoal
+  const CHIP_CAP = 80, FUEL_CAP = 60, MILL_CAP = 40, WATER_CAP = 40, OUT_CAP = 60, KILN_IN_CAP = 30, SHACK_COAL_CAP = 30;
   const yardSpots = () => [0, 12, 24, 48, 60][level.farm];
   const growTime = () => [25, 25, 18, 12, 8][level.farm];
   const groveSpots = () => [0, 6, 10, 15, 20, 25][level.grove];
@@ -317,14 +444,21 @@
   const stock = { wood: 0, oak: 0, plank: 0, syrup: 0 };   // store shelves
   const wh = { wood: 0, oak: 0, redwood: 0 };              // warehouse racks
   const pallet = { wood: 0, oak: 0, redwood: 0 };
-  const saw = { q: { wood: 0, oak: 0, redwood: 0 }, out: 0, t: 0 };
-  const shack = { sap: 0, out: 0, t: 0 };
+  const saw = { q: { wood: 0, oak: 0, redwood: 0 }, out: 0, t: 0, chips: 0 };
+  const shack = { sap: 0, out: 0, t: 0, coal: 0, coalUse: 0 };
   const pileAmt = { store: 0, dock: 0, showroom: 0, rail: 0 };
   const workshop = { planks: 0, chair: 0, table: 0, t: 0 };   // planks in, finished pieces waiting
   const showroom = { chair: 0, table: 0 };
   const car = { state: 'away', t: 6, y: 0, want: 0, got: 0, owed: 0, color: '#3d7cc9' };
   const train = { state: 'away', t: 10, x: 0, order: null, got: null, idle: 0 };
   const drone = { x: 0, y: 0, state: 'idle', target: null, load: 0, face: 1, bounce: 0, walk: 0, t: 0 };
+  const gen = { fuel: 0, t: 0, pellets: 0, pt: 0 };                // generator: chips as fuel, pellets pressed
+  const mill = { chips: 0, water: 0, out: 0, t: 0 };                // paper mill
+  const coalKiln = { oak: 0, out: 0, t: 0 };                        // charcoal kiln
+  let vans = [];
+  const stats = { earned: 0, sold: {}, goal: 0, contractsDone: 0 };
+  let contract = null;                                              // { kind, need, have, time, reward }
+  let ratePerMin = 0;
   const income = [];                                          // [time, amount] for the $/min chip
   const pending = { shelf: { wood: 0, oak: 0, plank: 0, syrup: 0 }, pallet: { wood: 0, oak: 0, redwood: 0 }, saw: 0, shack: 0, ws: 0, show: { chair: 0, table: 0 } };
   let cash = 0;
@@ -343,6 +477,16 @@
   const tileState = { id: null, wait: 0, lock: null };
 
   const palletCount = () => [1, 2, 4, 6][level.palletyard];
+  // demand from built machines vs what a fuelled generator supplies
+  function powerDemand() {
+    return (level.sawmill ? 20 : 0) + (level.workshop ? 20 : 0) + (level.papermill ? 40 : 0) + (level.conveyor ? 10 : 0);
+  }
+  const powerRatio = () => {
+    const d = powerDemand();
+    if (!level.generator || gen.fuel <= 0 || !d) return 0;
+    return Math.min(1, genCap() / d);
+  };
+  const boost = () => 1 + 0.5 * powerRatio();                      // up to +50% speed with full power
   const sawIn = () => saw.q.wood + saw.q.oak + saw.q.redwood;
   const sum = o => Object.values(o).reduce((a, b) => a + b, 0);
 
@@ -518,6 +662,11 @@
       for (const ry of RACKS) boxes.push({ x: RACK.x + ANNEX_DX, front: ry, w: RACK.w, d: RACK.d });
     }
     if (level.hq) boxes.push(HQ);
+    if (level.generator) boxes.push(GEN);
+    if (level.papermill) boxes.push(MILL);
+    if (level.pump) boxes.push(PUMP);
+    if (level.charcoal) boxes.push(KILN);
+    if (level.depot) boxes.push(DEPOT);
     // land you don't own yet is fenced off
     for (const id in DISTRICTS) {
       if (level[id]) continue;
@@ -647,6 +796,7 @@
     total = Math.round(total * incomeMul());
     if (total <= 0) return;
     income.push([performance.now(), total]);
+    stats.earned += total;
     const n = Math.min(total, 30), base = Math.floor(total / n), rem = total - base * n;
     for (let k = 0; k < n; k++) {
       const amt = base + (k < rem ? 1 : 0);
@@ -888,7 +1038,7 @@
           if (truck.got[kind] >= truck.order[kind]) continue;
           const src = wh[kind] > 0 ? wh : pallet[kind] > 0 ? pallet : null;
           if (!src) continue;
-          src[kind]--; truck.got[kind]++;
+          src[kind]--; truck.got[kind]++; noteSale(kind);
           fly(kind, src === wh ? whSpot : palletSpot, truckSpot, 0.6, null, 70);
           break;
         }
@@ -973,14 +1123,14 @@
         wh[kind]--; pending.shelf[kind]++;
         if (level.conveyor) {
           belt.push({ kind, d: 0 });
-          timers.refill = BELT_GAP[level.conveyor];
+          timers.refill = BELT_GAP[level.conveyor] / boost();
         } else {
           fly(kind, whSpot, () => shelfSpot(kind), 0.9, () => { pending.shelf[kind]--; stock[kind]++; }, 100);
           timers.refill = 0.9;
         }
       }
     }
-    const beltSpeed = BELT_SPEED[level.conveyor], beltLen = BELT.x1 - BELT.x0;
+    const beltSpeed = BELT_SPEED[level.conveyor] * boost(), beltLen = BELT.x1 - BELT.x0;
     for (let i = belt.length - 1; i >= 0; i--) {
       const it = belt[i];
       it.d += beltSpeed * dt;
@@ -1007,7 +1157,7 @@
       if (c.state === 'buy') {
         if (c.taken < c.want && c.t > serveTime() && stock[c.kind] > 0) {
           c.t = 0; c.taken++;
-          stock[c.kind]--;
+          stock[c.kind]--; noteSale(c.kind);
           fly(c.kind, shelfSpot(c.kind), () => custSpot(c), 0.3, () => { c.got++; });
           c.owed += unitPrice(c.kind);
         }
@@ -1044,40 +1194,71 @@
       }
     }
 
-    // upgrade tiles: stand on one and your cash pays into it
-    timers.pay -= dt;
-    const here = UPGRADES.find(u => inRect(u, TILE_SIZE, TILE_SIZE));
+    // group tiles: stand on one to open its panel
+    const here = GROUPS.find(g => inRect(g, TILE_SIZE, TILE_SIZE));
     if ((here ? here.id : null) !== tileState.id) {
       tileState.id = here ? here.id : null;
-      tileState.wait = 0.5;
-      tileState.lock = null;
-    }
-    tileState.wait -= dt;
-    if (here && level[here.id] < here.costs.length && !(here.needs && !level[here.needs]) &&
-        cash > 0 && timers.pay <= 0 && tileState.wait <= 0 && tileState.lock !== here.id) {
-      const u = here, lv = level[u.id];
-      timers.pay = 0.05;
-      const cost = u.costs[lv];
-      const chunk = Math.min(cash, cost - paid[u.id], Math.max(1, Math.ceil(cost / 25)));
-      cash -= chunk; paid[u.id] += chunk;
-      updateHud();
-      fly('cash', playerChest, toScreen(u.x, u.y), 0.25, null, 30);
-      if (paid[u.id] >= cost) {
-        level[u.id]++; paid[u.id] = 0;
-        tileState.lock = u.id;
-        popText(u.x, u.y, 40, u.hire && level[u.id] === 1 ? `${u.name} ready!` : `${u.name} Lv ${level[u.id] + (u.hire ? 0 : 1)}!`, '#fff3a6');
-        for (let i = 0; i < 16; i++) {
-          fx.push({ type: 'chip', kind: 'spark', x: u.x, y: u.y, h: 4, vx: (Math.random() - 0.5) * 260,
-                    vy: (Math.random() - 0.5) * 160, vh: 120 + Math.random() * 140, t: 0, life: 0.9 });
-        }
-        afterUpgrade();
-        save(true);
-      }
+      openPanel(here);
     }
   }
 
+  const canBuy = u => level[u.id] < u.costs.length && !(u.needs && !level[u.needs]);
+  function buy(id) {
+    const u = UPGRADES.find(x => x.id === id);
+    if (!u || !canBuy(u)) return;
+    const cost = u.costs[level[u.id]];
+    if (cash < cost) return;
+    cash -= cost; level[u.id]++;
+    updateHud('cash');
+    const g = GROUPS.find(x => x.id === u.group);
+    for (let i = 0; i < 10; i++) fly('cash', playerChest, toScreen(g.x, g.y), 0.25 + i * 0.03, null, 30);
+    popText(g.x, g.y, 50, u.hire && level[u.id] === 1 ? `${u.name} ready!` : `${u.name} Lv ${level[u.id]}!`, '#fff3a6');
+    for (let i = 0; i < 16; i++) {
+      fx.push({ type: 'chip', kind: 'spark', x: g.x, y: g.y, h: 4, vx: (Math.random() - 0.5) * 260,
+                vy: (Math.random() - 0.5) * 160, vh: 120 + Math.random() * 140, t: 0, life: 0.9 });
+    }
+    afterUpgrade();
+    save(true);
+    renderPanel();
+  }
+
+  let panelGroup = null, panelKey = '';
+  function openPanel(g) {
+    panelGroup = g;
+    ui.panel.hidden = !g;
+    ui.goals.hidden = !!g;
+    if (g) { ui.panelTitle.textContent = g.name; panelKey = ''; renderPanel(); hint.style.opacity = 0; }
+  }
+  function renderPanel() {
+    if (!panelGroup) return;
+    const items = UPGRADES.filter(u => u.group === panelGroup.id);
+    // only rebuild when something visible changed, so buttons don't flicker under a finger
+    const key = items.map(u => level[u.id] + (cash >= (u.costs[level[u.id]] ?? Infinity) ? 'y' : 'n')).join('|');
+    if (key === panelKey) return;
+    panelKey = key;
+    ui.panelList.innerHTML = items.map(u => {
+      const lv = level[u.id], max = lv >= u.costs.length, blocked = u.needs && !level[u.needs];
+      const cost = u.costs[lv];
+      const dots = u.costs.length > 1 ? `<span class="dots">${u.costs.map((_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>` : '';
+      const title = max ? u.name : lv === 0 && u.hire ? u.hire : u.name;
+      const note = max ? 'Fully upgraded' : blocked ? `Needs ${NAMES[u.needs]}` : upgradeNote(u, lv);
+      const btn = max ? '<span class="maxed">MAX</span>'
+        : blocked ? '<span class="locked">Locked</span>'
+        : `<button type="button" data-buy="${u.id}" ${cash < cost ? 'disabled' : ''}>$${cost.toLocaleString()}</button>`;
+      return `<div class="up${max ? ' done' : ''}"><div class="up-text"><div class="up-name">${title}${dots}</div><div class="up-note">${note}</div></div>${btn}</div>`;
+    }).join('');
+  }
+  function updatePanel(dt) {
+    timers.panel = (timers.panel || 0) - dt;
+    if (panelGroup && timers.panel <= 0) { timers.panel = 0.2; renderPanel(); }
+  }
+  ui.panelList.addEventListener('click', e => {
+    const b = e.target.closest('[data-buy]');
+    if (b) buy(b.dataset.buy);
+  });
+
   function afterUpgrade() {
-    ensureBots(); ensureYard(); ensureHaulers();
+    ensureBots(); ensureYard(); ensureHaulers(); ensureVans();
     if (level.drone && !drone.x) { drone.x = player.x - 50; drone.y = player.y - 20; }
     fillQueue(false);
     if (level.dock && truck.state === 'away') truck.t = Math.min(truck.t, 4);
@@ -1112,7 +1293,7 @@
     const next = ['redwood', 'oak', 'wood'].find(k => saw.q[k] > 0);
     if (next && saw.out < SAW_OUT_CAP) {
       saw.t += dt;
-      if (saw.t >= sawTime()) { saw.t = 0; saw.q[next]--; saw.out += PLANKS_PER[next]; }
+      if (saw.t >= sawTime() / boost()) { saw.t = 0; saw.q[next]--; saw.out += PLANKS_PER[next]; saw.chips = Math.min(CHIP_CAP, saw.chips + PLANKS_PER[next]); }
     } else saw.t = 0;
     timers.saw -= dt;
     if (saw.out > 0 && timers.saw <= 0) {
@@ -1146,7 +1327,10 @@
     }
     if (shack.sap >= 2 && shack.out < SHACK_OUT_CAP) {
       shack.t += dt;
-      if (shack.t >= boilTime()) { shack.t = 0; shack.sap -= 2; shack.out++; }
+      if (shack.t >= boilTime() / (shack.coal > 0 ? 2 : 1)) {
+        shack.t = 0; shack.sap -= 2; shack.out++;
+        if (shack.coal > 0 && ++shack.coalUse >= 2) { shack.coal--; shack.coalUse = 0; }
+      }
     } else shack.t = 0;
     timers.syrup -= dt;
     if (shack.out > 0 && timers.syrup <= 0 && stock.syrup + pending.shelf.syrup < shelfCap()) {
@@ -1163,7 +1347,7 @@
     const kind = showroom.chair + workshop.chair <= (showroom.table + workshop.table) * 2 ? 'chair' : 'table';
     if (workshop.planks >= need[kind] && workshop.chair + workshop.table < WS_OUT_CAP) {
       workshop.t += dt;
-      if (workshop.t >= workshopTime()) {
+      if (workshop.t >= workshopTime() / boost()) {
         workshop.t = 0; workshop.planks -= need[kind]; workshop[kind]++;
         popText(WORKSHOP.x, WORKSHOP.front, 120, `+1 ${kind === 'chair' ? 'Chair' : 'Table'}`, '#ffe2b0');
       }
@@ -1201,7 +1385,7 @@
         car.t = 0;
         const k = car.got % 2 && showroom.table > 0 ? 'table' : showroom.chair > 0 ? 'chair' : showroom.table > 0 ? 'table' : null;
         if (k && car.got < car.want) {
-          showroom[k]--; car.got++; car.owed += unitPrice(k);
+          showroom[k]--; car.got++; car.owed += unitPrice(k); noteSale(k);
           fly(k, showSpot(k), carSpot, 0.6, null, 60);
         } else {
           if (car.owed) {
@@ -1225,6 +1409,9 @@
     syrup: [[() => shack, 'out', shackOutSpot], [() => stock, 'syrup', () => shelfSpot('syrup')]],
     chair: [[() => workshop, 'chair', wsOutSpot], [() => showroom, 'chair', showSpot('chair')]],
     table: [[() => workshop, 'table', wsOutSpot], [() => showroom, 'table', showSpot('table')]],
+    paper: [[() => mill, 'out', () => bSpot(MILL)]],
+    pellets: [[() => gen, 'pellets', () => bSpot(GEN)]],
+    charcoal: [[() => coalKiln, 'out', () => bSpot(KILN)]],
   };
   function updateTrain(dt) {
     if (!level.rail) return;
@@ -1238,6 +1425,9 @@
         if (level.sawmill) want.push(['plank', 24]);
         if (level.shack) want.push(['syrup', 10]);
         if (level.workshop) want.push(['chair', 5], ['table', 3]);
+        if (level.papermill) want.push(['paper', 16]);
+        if (level.pellets) want.push(['pellets', 20]);
+        if (level.charcoal) want.push(['charcoal', 20]);
         if (!want.length) want.push(['wood', 40]);
         train.order = {}; train.got = {};
         for (const [k, n] of want) { train.order[k] = Math.max(1, Math.round(n * size * (0.7 + Math.random() * 0.6))); train.got[k] = 0; }
@@ -1254,7 +1444,7 @@
           if (train.got[k] >= train.order[k]) continue;
           const src = TRAIN_SRC[k].find(([o, f]) => o()[f] > 0);
           if (!src) continue;
-          src[0]()[src[1]]--; train.got[k]++; train.idle = 0;
+          src[0]()[src[1]]--; train.got[k]++; train.idle = 0; noteSale(k);
           fly(k, src[2], trainSpot, 0.9, null, 140);
           break;
         }
@@ -1313,13 +1503,183 @@
   const DRONE_H = 110;
   const droneSpot = () => { const [x, y] = toScreen(drone.x, drone.y); return [x, y - DRONE_H]; };
 
+  const bSpot = B => { const [x, y] = toScreen(B.x, B.front); return [x, y - 40]; };
+
+  function updateIndustry(dt) {
+    // generator burns chips in proportion to how much power is being drawn
+    if (level.generator && gen.fuel > 0) {
+      const load = Math.min(1, powerDemand() / genCap()) || 0.1;
+      gen.t += dt * load;
+      if (gen.t >= genBurn()) { gen.t = 0; gen.fuel--; }
+    }
+    // pellet press turns spare fuel into pellets
+    if (level.pellets && gen.fuel > 40 && gen.pellets < OUT_CAP) {
+      gen.pt += dt;
+      if (gen.pt >= pelletTime()) { gen.pt = 0; gen.fuel -= 2; gen.pellets++; }
+    }
+    // the pump fills the paper mill's water tank through a pipe
+    if (level.pump && level.papermill) mill.water = Math.min(WATER_CAP, mill.water + pumpRate() * dt);
+    // paper mill: 2 chips + 1 water → 1 ream, only with power
+    const pr = powerRatio();
+    if (level.papermill && pr > 0 && mill.chips >= 2 && mill.water >= 1 && mill.out < OUT_CAP) {
+      mill.t += dt * pr;
+      if (mill.t >= paperTime()) { mill.t = 0; mill.chips -= 2; mill.water -= 1; mill.out++; }
+    }
+    // charcoal kiln: 1 oak → 2 charcoal
+    if (level.charcoal && coalKiln.oak > 0 && coalKiln.out < OUT_CAP - 1) {
+      coalKiln.t += dt;
+      if (coalKiln.t >= coalTime()) { coalKiln.t = 0; coalKiln.oak--; coalKiln.out += 2; }
+    }
+  }
+
+  // ---------- Delivery vans ----------
+  // Each route moves one good from a building that has it to a building that needs it.
+  // Vans pick the route with the biggest shortfall that no other van is already running.
+  const ROUTES = [
+    { id: 'fuel', kind: 'chips', from: () => level.sawmill && level.generator, take: () => saw.chips, src: () => ({ x: SAW.x + 64, y: SAW.front + 30 }),
+      pick: n => { saw.chips -= n; }, need: () => FUEL_CAP - gen.fuel, dst: () => ({ x: GEN.x, y: GEN.front + 30 }), drop: n => { gen.fuel = Math.min(FUEL_CAP, gen.fuel + n); } },
+    { id: 'pulp', kind: 'chips', from: () => level.sawmill && level.papermill, take: () => saw.chips, src: () => ({ x: SAW.x + 64, y: SAW.front + 30 }),
+      pick: n => { saw.chips -= n; }, need: () => MILL_CAP - mill.chips, dst: () => ({ x: MILL.x, y: MILL.front + 30 }), drop: n => { mill.chips = Math.min(MILL_CAP, mill.chips + n); } },
+    { id: 'oak', kind: 'oak', from: () => level.warehouse && level.charcoal, take: () => wh.oak, src: () => ({ x: WH_IN.x, y: WH_IN.y + 60 }),
+      pick: n => { wh.oak -= n; }, need: () => KILN_IN_CAP - coalKiln.oak, dst: () => ({ x: KILN.x, y: KILN.front + 30 }), drop: n => { coalKiln.oak = Math.min(KILN_IN_CAP, coalKiln.oak + n); } },
+    { id: 'coal', kind: 'charcoal', from: () => level.charcoal && level.shack, take: () => coalKiln.out, src: () => ({ x: KILN.x, y: KILN.front + 30 }),
+      pick: n => { coalKiln.out -= n; }, need: () => SHACK_COAL_CAP - shack.coal, dst: () => ({ x: SHACK.x, y: SHACK.front + 30 }), drop: n => { shack.coal = Math.min(SHACK_COAL_CAP, shack.coal + n); } },
+  ];
+  function ensureVans() {
+    for (let i = vans.length; i < vanCount(); i++) {
+      vans.push({ idx: i, x: DEPOT.x - 80 + i * 40, y: DEPOT.front + 30, state: 'idle', route: null, load: 0, face: 1, bounce: 0, walk: 0, t: 0 });
+    }
+  }
+  function updateVans(dt) {
+    const spd = vanSpeed(), cap = vanCap();
+    for (const v of vans) {
+      v.t += dt;
+      if (v.state === 'idle') {
+        let best = null, bn = 0;
+        for (const r of ROUTES) {
+          if (!r.from() || vans.some(o => o !== v && o.route === r)) continue;
+          const n = Math.min(r.need(), r.take());
+          if (n >= 3 && n > bn) { bn = n; best = r; }
+        }
+        if (best) { v.route = best; v.state = 'toSrc'; }
+        else moveEntity(v, DEPOT.x - 80 + v.idx * 40, DEPOT.front + 30, spd, dt);
+      } else if (v.state === 'toSrc') {
+        const p = v.route.src();
+        if (moveEntity(v, p.x, p.y, spd, dt) < 3) {
+          const n = Math.min(cap, v.route.take(), v.route.need());
+          if (n <= 0) { v.state = 'idle'; v.route = null; continue; }
+          v.route.pick(n); v.load = n;
+          const [sx, sy] = toScreen(p.x, p.y);
+          for (let i = 0; i < Math.min(n, 8); i++) fly(v.route.kind, [sx, sy - 40], () => vanSpot(v), 0.3 + i * 0.04, null, 20);
+          v.state = 'toDst';
+        }
+      } else if (v.state === 'toDst') {
+        const p = v.route.dst();
+        if (moveEntity(v, p.x, p.y, spd, dt) < 3) {
+          const [dx, dy] = toScreen(p.x, p.y);
+          for (let i = 0; i < Math.min(v.load, 8); i++) fly(v.route.kind, () => vanSpot(v), [dx, dy - 40], 0.3 + i * 0.04, null, 20);
+          v.route.drop(v.load); v.load = 0;
+          v.state = 'idle'; v.route = null;
+        }
+      }
+    }
+  }
+  const vanSpot = v => { const [x, y] = toScreen(v.x, v.y); return [x, y - 34]; };
+
+  // ---------- Contracts and milestones ----------
+  const CONTRACT_BASE = { wood: 40, oak: 25, plank: 30, syrup: 15, chair: 6, table: 4, paper: 20, charcoal: 25, pellets: 20 };
+  function contractKinds() {
+    const k = ['wood', 'oak'];
+    if (level.sawmill) k.push('plank');
+    if (level.shack) k.push('syrup');
+    if (level.showroom || level.rail) { if (level.workshop) k.push('chair', 'table'); }
+    if (level.rail) {
+      if (level.papermill) k.push('paper');
+      if (level.charcoal) k.push('charcoal');
+      if (level.pellets) k.push('pellets');
+    }
+    return k;
+  }
+  function newContract() {
+    const kinds = contractKinds();
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    const need = Math.round(CONTRACT_BASE[kind] * (1 + 0.35 * stats.contractsDone) * (1 + level.store * 0.3));
+    contract = { kind, need, have: 0, time: 240, reward: Math.round(need * unitPrice(kind) * 3 + 100) };
+  }
+  function noteSale(kind, n = 1) {
+    stats.sold[kind] = (stats.sold[kind] || 0) + n;
+    if (contract && contract.kind === kind && contract.time > 0) contract.have += n;
+  }
+  const MILESTONES = [
+    ['Earn your first $100', () => stats.earned >= 100, 50],
+    ['Build a Warehouse', () => level.warehouse > 0, 150],
+    ['Reach $100/min', () => ratePerMin >= 100, 300],
+    ['Build the Sawmill', () => level.sawmill > 0, 300],
+    ['Own 3 machines', () => bots.length >= 3, 600],
+    ['Buy a land deed', () => level.reserve || level.east || level.rail || level.industry, 1000],
+    ['Reach $500/min', () => ratePerMin >= 500, 2000],
+    ['Power up the Industrial Park', () => level.generator > 0, 3000],
+    ['Run 3 delivery vans', () => vanCount() >= 3, 4000],
+    ['Sell 100 reams of paper', () => (stats.sold.paper || 0) >= 100, 6000],
+    ['Reach $2,000/min', () => ratePerMin >= 2000, 10000],
+    ['Earn $1,000,000 in total', () => stats.earned >= 1e6, 50000],
+    ['Reach $10,000/min', () => ratePerMin >= 10000, 100000],
+  ];
+  function reward(amount, text) {
+    cash += amount; updateHud('cash');
+    popText(player.x, player.y, 90, `${text} +$${amount.toLocaleString()}`, '#fff3a6');
+    toast(`${text} · +$${amount.toLocaleString()}`);
+    for (let i = 0; i < 20; i++) {
+      fx.push({ type: 'chip', kind: 'spark', x: player.x, y: player.y, h: 30, vx: (Math.random() - 0.5) * 300,
+                vy: (Math.random() - 0.5) * 180, vh: 140 + Math.random() * 160, t: 0, life: 1 });
+    }
+  }
+  let toastTimer = 0;
+  function toast(text) {
+    ui.toast.textContent = text;
+    ui.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { ui.toast.hidden = true; }, 3200);
+  }
+  function updateGoals(dt) {
+    if (!contract && stats.earned > 0) newContract();
+    if (contract) {
+      contract.time -= dt;
+      if (contract.have >= contract.need) {
+        stats.contractsDone++;
+        reward(contract.reward, 'Contract done!');
+        contract = null;
+      } else if (contract.time <= 0) {
+        toast(`Contract expired: ${contract.have}/${contract.need} ${ITEM_NAME[contract.kind].toLowerCase()}`);
+        contract = null;
+      }
+    }
+    const m = MILESTONES[stats.goal];
+    if (m && m[1]()) { stats.goal++; reward(m[2], m[0]); }
+    timers.goalsUi = (timers.goalsUi || 0) - dt;
+    if (timers.goalsUi <= 0) { timers.goalsUi = 0.25; renderGoals(); }
+  }
+  function renderGoals() {
+    const c = contract, m = MILESTONES[stats.goal];
+    let html = '';
+    if (c) {
+      const mm = Math.floor(Math.max(0, c.time) / 60), ss = String(Math.floor(Math.max(0, c.time) % 60)).padStart(2, '0');
+      html += `<div class="goal-row"><b>Contract</b> Sell ${c.need} ${ITEM_NAME[c.kind].toLowerCase()} · ${Math.min(c.have, c.need)}/${c.need} · ${mm}:${ss} · <span class="rw">$${c.reward.toLocaleString()}</span></div>`;
+      html += `<div class="bar"><i style="width:${Math.min(100, c.have / c.need * 100)}%"></i></div>`;
+    }
+    if (m) html += `<div class="goal-row"><b>Goal</b> ${m[0]} · <span class="rw">$${m[2].toLocaleString()}</span></div>`;
+    ui.goals.innerHTML = html;
+    ui.goals.hidden = !html || !ui.panel.hidden;
+  }
+
   function updateRate(dt) {
     timers.rate -= dt;
     if (timers.rate > 0) return;
     timers.rate = 1;
     const now = performance.now();
     while (income.length && now - income[0][0] > 60000) income.shift();
-    ui.rate.textContent = '$' + income.reduce((a, e) => a + e[1], 0) + '/min';
+    ratePerMin = income.reduce((a, e) => a + e[1], 0);
+    ui.rate.textContent = '$' + ratePerMin.toLocaleString() + '/min';
   }
 
   function updateHud(bump) {
@@ -1378,6 +1738,10 @@
     updateTrain(dt);
     updateDrone(dt);
     updateRate(dt);
+    updateIndustry(dt);
+    updateVans(dt);
+    updateGoals(dt);
+    updatePanel(dt);
 
     for (let i = fx.length - 1; i >= 0; i--) {
       const f = fx[i];
@@ -1522,7 +1886,7 @@
       groundRect(BOT_HOME[id].x, BOT_HOME[id].y, id === 'truck' ? 90 : 56, 56, 8); ctx.fill();
     }
 
-    for (const u of UPGRADES) drawUpgradeTile(u, time);
+    for (const g of GROUPS) drawGroupTile(g, time);
   }
 
   function drawDistrict(id) {
@@ -1532,6 +1896,14 @@
     if (level[id]) {
       ctx.fillStyle = d.ground;
       groundRect(cx, cy, w, dd, 24); ctx.fill();
+      if (id === 'industry') {
+        drawPond();
+        if (!level.depot) dashedPlot(DEPOT.x, DEPOT.front - DEPOT.d / 2, DEPOT.w, DEPOT.d, 'Van Depot plot');
+        if (!level.generator) dashedPlot(GEN.x, GEN.front - GEN.d / 2, GEN.w, GEN.d, 'Generator plot');
+        if (!level.papermill) dashedPlot(MILL.x, MILL.front - MILL.d / 2, MILL.w, MILL.d, 'Paper Mill plot');
+        if (!level.pump) dashedPlot(PUMP.x, PUMP.front - PUMP.d / 2, PUMP.w, PUMP.d, 'Pump plot');
+        if (!level.charcoal) dashedPlot(KILN.x, KILN.front - KILN.d / 2, KILN.w, KILN.d, 'Charcoal Kiln plot');
+      }
       if (id === 'east') {
         if (!level.workshop) dashedPlot(WORKSHOP.x, WORKSHOP.front - WORKSHOP.d / 2, WORKSHOP.w, WORKSHOP.d, 'Workshop plot');
         if (!level.showroom) dashedPlot(SHOWROOM.x, SHOWROOM.front - SHOWROOM.d / 2, SHOWROOM.w, SHOWROOM.d, 'Showroom plot');
@@ -1580,35 +1952,29 @@
     flatLabel(text, x, y, size, color);
   }
 
-  function drawUpgradeTile(u, time) {
-    const [sx, sy] = toScreen(u.x, u.y);
-    if (sx < -140 || sx > W + 140 || sy < -110 || sy > H + 80) return;
-    const lv = level[u.id], max = lv >= u.costs.length, blocked = u.needs && !level[u.needs];
-    const on = inRect(u, TILE_SIZE, TILE_SIZE);
-    ctx.fillStyle = max ? '#6f8d5a' : '#5d5d55';
-    groundRect(u.x, u.y + 6, TILE_SIZE, TILE_SIZE, 12); ctx.fill();
-    ctx.fillStyle = max ? '#9cc27f' : blocked ? '#6c6c64' : on ? '#8f8f84' : '#7c7c72';
-    groundRect(u.x, u.y, TILE_SIZE, TILE_SIZE, 12); ctx.fill();
-    if (!max && !blocked) {
-      const p = paid[u.id] / u.costs[lv];
-      if (p > 0) {
-        ctx.save();
-        groundRect(u.x, u.y, TILE_SIZE, TILE_SIZE, 12); ctx.clip();
-        ctx.fillStyle = '#5fbf6c';
-        const top = sy + TILE_SIZE * TILT / 2 - TILE_SIZE * TILT * p;
-        ctx.fillRect(sx - TILE_SIZE / 2, top, TILE_SIZE, TILE_SIZE * TILT * p);
-        ctx.restore();
-      }
-      ctx.lineWidth = 2; ctx.strokeStyle = on ? '#fff3a6' : 'rgba(255,250,240,.6)';
-      groundRect(u.x, u.y, TILE_SIZE, TILE_SIZE, 12); ctx.stroke();
-    }
-    flatLabel(max ? 'MAX' : blocked ? 'Locked' : `$${u.costs[lv] - paid[u.id]}`, sx, sy + 1, blocked ? 17 : 20, '#fffaf0');
-    const bob = Math.sin(time * 2 + u.x) * 2;
-    tag(upgradeTitle(u, lv), sx, sy - 64 + bob, 16, '#fffaf0');
-    const note = max ? 'Fully upgraded'
-      : blocked ? `Needs ${NAMES[u.needs]}`
-      : on && tileState.lock === u.id ? 'Step off, then back on to buy' : upgradeNote(u, lv);
-    flatLabel(note, sx, sy - 38 + bob, 15, '#2b2a22', 600);
+  function drawGroupTile(g, time) {
+    const [sx, sy] = toScreen(g.x, g.y);
+    if (sx < -160 || sx > W + 160 || sy < -120 || sy > H + 80) return;
+    const items = UPGRADES.filter(u => u.group === g.id);
+    const open = items.filter(canBuy);
+    const cheapest = open.length ? Math.min(...open.map(u => u.costs[level[u.id]])) : 0;
+    const afford = open.some(u => cash >= u.costs[level[u.id]]);
+    const on = inRect(g, TILE_SIZE, TILE_SIZE);
+    ctx.fillStyle = '#4d4d46';
+    groundRect(g.x, g.y + 8, TILE_SIZE, TILE_SIZE, 16); ctx.fill();
+    ctx.fillStyle = !open.length ? '#9cc27f' : on ? '#9a9a8c' : afford ? '#6f9c6a' : '#7c7c72';
+    groundRect(g.x, g.y, TILE_SIZE, TILE_SIZE, 16); ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = on ? '#fff3a6' : afford ? '#d8f5c8' : 'rgba(255,250,240,.6)';
+    groundRect(g.x, g.y, TILE_SIZE, TILE_SIZE, 16); ctx.stroke();
+    // a little up-arrow icon so tiles read as "upgrades here"
+    ctx.fillStyle = '#fffaf0';
+    ctx.beginPath(); ctx.moveTo(sx, sy - 14); ctx.lineTo(sx + 12, sy - 2); ctx.lineTo(sx + 5, sy - 2); ctx.lineTo(sx + 5, sy + 10);
+    ctx.lineTo(sx - 5, sy + 10); ctx.lineTo(sx - 5, sy - 2); ctx.lineTo(sx - 12, sy - 2); ctx.closePath(); ctx.fill();
+    const bob = Math.sin(time * 2 + g.x) * 2;
+    tag(g.name, sx, sy - 66 + bob, 17, '#fffaf0');
+    const note = !open.length ? (items.every(u => level[u.id] >= u.costs.length) ? 'All upgraded' : 'Nothing to buy yet')
+      : `${open.length} upgrade${open.length > 1 ? 's' : ''} · from $${cheapest.toLocaleString()}`;
+    flatLabel(note, sx, sy - 40 + bob, 15, afford ? '#1f5a2a' : '#2b2a22', 600);
   }
 
   function drawDecor(d) {
@@ -1828,6 +2194,7 @@
     let n = 0;
     for (const k of LOGS) for (let i = 0; i < saw.q[k] && n < 15; i++, n++) drawItem(k, sx - 62 + (n % 3) * 4, sy - 6 - Math.floor(n / 3) * 6);
     for (let i = 0; i < Math.min(saw.out, 20); i++) drawPlank(sx + 66, sy - 6 - i * 4);
+    for (let i = 0; i < Math.min(saw.chips, 24); i++) drawChips(sx + 92 + (i % 3) * 7, sy - 4 - Math.floor(i / 3) * 4);
     if (level.kiln) {
       // brick kiln chimney with heat shimmer
       ctx.fillStyle = '#9b4434';
@@ -1867,7 +2234,7 @@
     for (let i = 0; i < Math.min(shack.sap, 12); i++) drawSap(sx - 54 + (i % 3) * 9, sy - 6 - Math.floor(i / 3) * 9);
     for (let i = 0; i < Math.min(shack.out, 12); i++) drawSyrup(sx + 48 + (i % 3) * 8, sy - 6 - Math.floor(i / 3) * 12);
     tag('SUGAR SHACK', sx, sy - back - 114, 15, '#ffe2b0', '#5a4630');
-    tag(`${shack.sap} sap → ${shack.out} syrup`, sx, sy - back - 86, 13, '#fffaf0');
+    tag(`${shack.sap} sap → ${shack.out} syrup${shack.coal ? ` · charcoal ${shack.coal} (2× speed)` : ''}`, sx, sy - back - 86, 13, '#fffaf0');
   }
 
   function drawWorkshop() {
@@ -2020,6 +2387,113 @@
     const wave = Math.sin(performance.now() / 300) * 3;
     ctx.beginPath(); ctx.moveTo(sx + hw - 27, sy - wallH - back - 50); ctx.lineTo(sx + hw + 3, sy - wallH - back - 44 + wave); ctx.lineTo(sx + hw - 27, sy - wallH - back - 36); ctx.fill();
     tag(`HOMESTEAD HQ · +${Math.round((incomeMul() - 1) * 100)}% on all sales`, sx, sy - wallH - back - 20, 16, '#ffd75a', '#2b2a22');
+  }
+
+  function drawGenerator() {
+    const [sx, sy, back] = shed(GEN.x, GEN.front, GEN.w, GEN.d, '#6a6f78', '#3c4654');
+    const pr = powerRatio();
+    // turbine housing and a smokestack that smokes while burning
+    ctx.fillStyle = '#9aa3ad';
+    roundRect(sx - 40, sy - 52, 80, 40, 10); ctx.fill();
+    ctx.fillStyle = pr > 0 ? '#ffd75a' : '#5f646c';
+    ctx.beginPath(); ctx.arc(sx, sy - 32, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4a4a46';
+    ctx.fillRect(sx + 50, sy - back - 120, 20, 90);
+    if (gen.fuel > 0) {
+      const t = performance.now() / 600;
+      for (let i = 0; i < 3; i++) {
+        const p = (t + i / 3) % 1;
+        ctx.fillStyle = `rgba(110,110,110,${0.45 * (1 - p)})`;
+        ctx.beginPath(); ctx.arc(sx + 60 + Math.sin(p * 4) * 6, sy - back - 126 - p * 60, 8 + p * 10, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // chip pile, pellet bags
+    for (let i = 0; i < Math.min(gen.fuel, 30); i++) drawChips(sx - 70 + (i % 5) * 7, sy - 6 - Math.floor(i / 5) * 4);
+    for (let i = 0; i < Math.min(gen.pellets, 12); i++) drawPellets(sx - 20 + (i % 4) * 10, sy - 4 - Math.floor(i / 4) * 8);
+    tag('GENERATOR', sx, sy - back - 140, 15, '#ffe2b0', '#5a4630');
+    tag(`Power ${Math.round(pr * 100)}% · fuel ${gen.fuel}/${FUEL_CAP}`, sx, sy - back - 114, 13, pr > 0 ? '#fff3a6' : '#ffd0c4');
+    if (level.pellets) tag(`${gen.pellets} pellets`, sx, sy + 18, 12, '#fffaf0');
+  }
+  function drawPaperMill() {
+    const [sx, sy, back] = shed(MILL.x, MILL.front, MILL.w, MILL.d, '#e0d9c8', '#5f6b7a');
+    // rollers spin while it works
+    const running = level.papermill && powerRatio() > 0 && mill.chips >= 2 && mill.water >= 1;
+    const a = running ? performance.now() / 200 : 0;
+    for (const dx of [-30, 0, 30]) {
+      ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.arc(sx + dx, sy - 30, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#5f646c'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sx + dx, sy - 30); ctx.lineTo(sx + dx + Math.cos(a) * 10, sy - 30 + Math.sin(a) * 10); ctx.stroke();
+    }
+    ctx.fillStyle = '#fffaf0'; ctx.fillRect(sx - 44, sy - 20, 88, 4);
+    for (let i = 0; i < Math.min(mill.out, 15); i++) drawPaper(sx + 80, sy - 6 - i * 4);
+    for (let i = 0; i < Math.min(mill.chips, 20); i++) drawChips(sx - 90 + (i % 4) * 7, sy - 6 - Math.floor(i / 4) * 4);
+    tag('PAPER MILL', sx, sy - back - 114, 15, '#ffe2b0', '#5a4630');
+    const why = !powerRatio() ? 'Needs power' : mill.water < 1 ? 'Needs water' : mill.chips < 2 ? 'Needs chips' : 'Running';
+    tag(`${mill.chips} chips · ${Math.floor(mill.water)} water → ${mill.out} paper · ${why}`, sx, sy - back - 88, 12, why === 'Running' ? '#fffaf0' : '#ffd0c4');
+  }
+  function drawPond() {
+    const [px, py] = toScreen(POND.x, POND.y);
+    ctx.fillStyle = '#5a8fb0';
+    ctx.beginPath(); ctx.ellipse(px, py, 110, 110 * TILT, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    ctx.beginPath(); ctx.ellipse(px - 30, py - 10, 30, 6, 0, 0, Math.PI * 2); ctx.fill();
+    if (level.pump && level.papermill) {
+      // pipe from the pump to the paper mill
+      const [ax, ay] = toScreen(PUMP.x - 50, PUMP.front - 20), [bx, by] = toScreen(MILL.x + MILL.w / 2, MILL.front - 30);
+      ctx.strokeStyle = '#5f6b7a'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.strokeStyle = '#7fb4cf'; ctx.lineWidth = 2; ctx.setLineDash([6, 8]); ctx.lineDashOffset = -performance.now() / 30;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  function drawPump() {
+    const [sx, sy] = toScreen(PUMP.x, PUMP.front);
+    ctx.fillStyle = '#3d6fa8'; roundRect(sx - 40, sy - 50, 80, 50, 6); ctx.fill();
+    ctx.fillStyle = '#2b3a4a'; ctx.fillRect(sx - 44, sy - 56, 88, 8);
+    const bob = Math.sin(performance.now() / 200) * 6;
+    ctx.fillStyle = '#9aa3ad'; ctx.fillRect(sx + 20, sy - 76 + bob, 6, 24);
+    tag(`PUMP · ${pumpRate()}/s`, sx, sy - 74, 12, '#fffaf0');
+  }
+  function drawCoalKiln() {
+    const [sx, sy] = toScreen(KILN.x, KILN.front);
+    // three brick domes glowing while they burn
+    const burning = coalKiln.oak > 0;
+    for (const dx of [-55, 0, 55]) {
+      ctx.fillStyle = '#9b4434'; ctx.beginPath(); ctx.arc(sx + dx, sy - 12, 28, Math.PI, 0); ctx.fill();
+      ctx.fillRect(sx + dx - 28, sy - 12, 56, 12);
+      ctx.fillStyle = burning ? `rgba(255,${140 + Math.sin(performance.now() / 150 + dx) * 40},40,.9)` : '#3a2a22';
+      roundRect(sx + dx - 8, sy - 22, 16, 18, 6); ctx.fill();
+    }
+    for (let i = 0; i < Math.min(coalKiln.oak, 12); i++) drawOak(sx - 96, sy - 6 - i * 5);
+    for (let i = 0; i < Math.min(coalKiln.out, 20); i++) drawCharcoal(sx + 92 + (i % 3) * 7, sy - 6 - Math.floor(i / 3) * 5);
+    tag('CHARCOAL KILN', sx, sy - 74, 15, '#ffe2b0', '#5a4630');
+    tag(`${coalKiln.oak} oak → ${coalKiln.out} charcoal`, sx, sy - 48, 12, '#fffaf0');
+  }
+  function drawDepot() {
+    const [sx, sy, back] = shed(DEPOT.x, DEPOT.front, DEPOT.w, DEPOT.d, '#d9d2c2', '#3d6fa8');
+    ctx.fillStyle = '#5f6b7a';
+    for (const dx of [-60, 0, 60]) ctx.fillRect(sx + dx - 24, sy - 46, 48, 46);
+    ctx.fillStyle = '#9aa3ad';
+    for (const dx of [-60, 0, 60]) for (let y = 0; y < 46; y += 8) ctx.fillRect(sx + dx - 24, sy - 46 + y, 48, 2);
+    tag(`VAN DEPOT · ${vanCount()} van${vanCount() === 1 ? '' : 's'}`, sx, sy - back - 114, 14, '#ffe2b0', '#5a4630');
+  }
+  function drawVan(v) {
+    const [sx, sy] = toScreen(v.x, v.y);
+    const hop = v.state !== 'idle' ? Math.abs(Math.sin(v.bounce)) * 1.2 : 0;
+    ctx.fillStyle = 'rgba(30,40,20,.3)';
+    ctx.beginPath(); ctx.ellipse(sx, sy, 30, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(sx, sy - hop); ctx.scale(v.face, 1);
+    ctx.fillStyle = '#2b2a22';
+    ctx.beginPath(); ctx.arc(-16, -5, 6, 0, Math.PI * 2); ctx.arc(16, -5, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f2ece0'; roundRect(-28, -34, 44, 28, 5); ctx.fill();
+    ctx.fillStyle = '#e8e2d4'; roundRect(14, -26, 16, 20, 5); ctx.fill();
+    ctx.fillStyle = '#bfe3f0'; roundRect(18, -23, 9, 9, 2); ctx.fill();
+    ctx.fillStyle = '#3f9d4f'; ctx.fillRect(-28, -18, 44, 4);
+    ctx.restore();
+    if (v.load && v.route) {
+      drawItem(v.route.kind, sx - 8, sy - 48);
+      flatLabel(`${v.load}`, sx + 10, sy - 48, 12, '#fffaf0');
+    }
   }
 
   function drawBillboard() {
@@ -2223,7 +2697,27 @@
     ctx.fillStyle = '#7a4e2a';
     ctx.fillRect(x - 9, y, 2, 8); ctx.fillRect(x + 7, y, 2, 8);
   }
-  const ITEM_DRAW = { wood: drawLog, oak: drawOak, redwood: drawRedwood, plank: drawPlank, sap: drawSap, syrup: drawSyrup, cash: drawBill, chair: drawChair, table: drawTable };
+  function drawChips(x, y) {
+    ctx.fillStyle = '#e3c28e'; ctx.fillRect(x - 3, y - 2, 4, 3);
+    ctx.fillStyle = '#c9a26a'; ctx.fillRect(x + 1, y - 1, 3, 2);
+  }
+  function drawPaper(x, y) {
+    ctx.fillStyle = '#fffaf0'; ctx.fillRect(x - 9, y - 3, 18, 5);
+    ctx.fillStyle = '#c9d6e0'; ctx.fillRect(x - 9, y + 1, 18, 1.5);
+  }
+  function drawPellets(x, y) {
+    ctx.fillStyle = '#b58a55'; roundRect(x - 5, y - 7, 10, 10, 3); ctx.fill();
+    ctx.fillStyle = '#8a6a43'; ctx.fillRect(x - 3, y - 9, 6, 3);
+  }
+  function drawCharcoal(x, y) {
+    ctx.fillStyle = '#2b2a22'; ctx.beginPath(); ctx.ellipse(x, y, 5, 3.5, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a5850'; ctx.fillRect(x - 2, y - 2, 2, 1.5);
+  }
+  function drawWater(x, y) {
+    ctx.fillStyle = '#5a8fb0'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  const ITEM_DRAW = { wood: drawLog, oak: drawOak, redwood: drawRedwood, plank: drawPlank, sap: drawSap, syrup: drawSyrup, cash: drawBill, chair: drawChair, table: drawTable,
+    chips: drawChips, paper: drawPaper, pellets: drawPellets, charcoal: drawCharcoal, water: drawWater };
   const drawItem = (kind, x, y) => (ITEM_DRAW[kind] || drawBill)(x, y);
 
   // ---------- Draw: people and machines ----------
@@ -2519,6 +3013,12 @@
     if (level.rail) { add(STATION.front - 1, drawStation); add(TRACK_Y, drawTrain); }
     if (level.ads) add(BILLBOARD.y, drawBillboard);
     if (level.hq) add(HQ.front - 1, drawHQ);
+    if (level.generator) add(GEN.front - 1, drawGenerator);
+    if (level.papermill) add(MILL.front - 1, drawPaperMill);
+    if (level.pump) add(PUMP.front - 1, drawPump);
+    if (level.charcoal) add(KILN.front - 1, drawCoalKiln);
+    if (level.depot) add(DEPOT.front - 1, drawDepot);
+    for (const v of vans) if (onScreen(v.x, v.y, 60)) add(v.y, () => drawVan(v));
     else if (onScreen(HQ.x, HQ.front, 200)) add(HQ.front - 200, () => dashedPlot(HQ.x, HQ.front - HQ.d / 2, HQ.w, HQ.d, 'Head Office plot'));
     for (const key in PILES) if (key === 'store' || level[key]) add(PILES[key].y, () => drawCashPile(key));
     add(player.y, drawPlayer);
@@ -2542,11 +3042,39 @@
   const varCache = {};
   function getVar(n) { return varCache[n] || (varCache[n] = getComputedStyle(document.documentElement).getPropertyValue(n).trim()); }
 
+  // ---------- Mini map ----------
+  const mapCtx = ui.map.getContext('2d');
+  let mapBig = false;
+  ui.map.addEventListener('click', () => { mapBig = !mapBig; ui.map.classList.toggle('big', mapBig); drawMap(); });
+  function drawMap() {
+    const size = mapBig ? 240 : 110, k = size / WORLD_W;
+    if (ui.map.width !== size * DPR) { ui.map.width = size * DPR; ui.map.height = size * DPR; }
+    const m = mapCtx;
+    m.setTransform(DPR, 0, 0, DPR, 0, 0);
+    m.fillStyle = '#4f7a36'; m.fillRect(0, 0, size, size);
+    const rect = (x0, y0, x1, y1, c) => { m.fillStyle = c; m.fillRect(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k); };
+    rect(CX - 1080, CY - 720, CX + 1160, CY + 1160, '#c9b48a');
+    for (const r of ROADS) rect(r.x0, r.y0, r.x1, r.y1, '#c9b48a');
+    for (const id in DISTRICTS) { const d = DISTRICTS[id]; rect(d.x0, d.y0, d.x1, d.y1, level[id] ? d.ground : 'rgba(30,40,24,.55)'); }
+    const dot = (x, y, r, c) => { m.fillStyle = c; m.beginPath(); m.arc(x * k, y * k, r, 0, Math.PI * 2); m.fill(); };
+    dot(STORE.x, STORE.front, 3.5, '#d9644a');
+    if (level.warehouse) rect(WH.x0, WH.y0, WH.x1, WH.y1, '#8a3b2e');
+    for (const key in PILES) if (pileAmt[key] > 0) dot(PILES[key].x, PILES[key].y, 3, '#7fe08a');
+    for (const g of GROUPS) if (UPGRADES.some(u => u.group === g.id && canBuy(u) && cash >= u.costs[level[u.id]])) dot(g.x, g.y, 2.5, '#fff3a6');
+    for (const v of vans) dot(v.x, v.y, 1.6, '#fffaf0');
+    for (const b of bots) dot(b.x, b.y, 1.6, '#e8b83a');
+    // you, and the view
+    m.strokeStyle = 'rgba(255,255,255,.6)'; m.lineWidth = 1;
+    m.strokeRect(cam.x * k, (cam.y / TILT) * k, W * k, (H / TILT) * k);
+    dot(player.x, player.y, 3.5, '#fffaf0'); dot(player.x, player.y, 2, '#2b2a22');
+  }
+
   // ---------- Loop ----------
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     update(dt); render(now / 1000);
+    if ((timers.map = (timers.map || 0) - dt) <= 0) { timers.map = 0.3; drawMap(); }
     requestAnimationFrame(frame);
   }
 
@@ -2557,10 +3085,13 @@
 
   function snapshot() {
     return {
-      v: 9, savedAt: Date.now(), px: Math.round(player.x), py: Math.round(player.y),
+      v: 10, savedAt: Date.now(), px: Math.round(player.x), py: Math.round(player.y),
       carried: { ...carried }, stock: { ...stock }, wh: { ...wh }, pallet: { ...pallet },
       saw: { q: { ...saw.q }, out: saw.out }, shack: { sap: shack.sap, out: shack.out },
       workshop: { planks: workshop.planks, chair: workshop.chair, table: workshop.table }, showroom: { ...showroom },
+      gen: { fuel: gen.fuel, pellets: gen.pellets }, mill: { chips: mill.chips, water: Math.floor(mill.water), out: mill.out },
+      coalKiln: { oak: coalKiln.oak, out: coalKiln.out }, shackCoal: shack.coal, chips: saw.chips,
+      stats, contract,
       level: { ...level }, paid: { ...paid }, cash, piles: { ...pileAmt }, served,
       hp: nodes.map(n => n.type === 'maple' ? Math.round(n.sap * 100) / 100 : n.hp),
       grow: nodes.map(n => n.farm ? Math.round((n.grow ?? 1) * 100) / 100 : 1),
@@ -2580,8 +3111,15 @@
     if (d.shack) { shack.sap = d.shack.sap; shack.out = d.shack.out; }
     if (d.workshop) { workshop.planks = d.workshop.planks; workshop.chair = d.workshop.chair; workshop.table = d.workshop.table; }
     merge(showroom, d.showroom);
+    merge(gen, d.gen); merge(mill, d.mill); merge(coalKiln, d.coalKiln);
+    shack.coal = d.shackCoal || 0; saw.chips = d.chips || 0;
+    if (d.stats) { Object.assign(stats, d.stats); stats.sold = { ...(d.stats.sold || {}) }; }
+    contract = d.contract || null;
     merge(level, d.level); merge(paid, d.paid);
     cash = d.cash; served = d.served;
+    // upgrades used to be paid off a bit at a time; give back anything that was part-paid
+    for (const id in paid) { cash += paid[id] || 0; paid[id] = 0; }
+    vans = []; ensureVans();
     if (d.piles) merge(pileAmt, d.piles); else pileAmt.store = d.pile || 0;
     stack = [];
     for (const k of ['wood', 'oak', 'redwood', 'sap']) for (let i = 0; i < carried[k]; i++) stack.push(k);
