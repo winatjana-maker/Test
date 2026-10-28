@@ -155,6 +155,18 @@
   .up button:disabled { background: #b9b2a2; box-shadow: 0 3px 0 #9a9384; cursor: default; }
   .up button:not(:disabled):active { transform: translateY(2px); box-shadow: none; }
   .up button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .ctl-sec { border-top: 1px solid #ece3d0; padding: 8px 0; }
+  .ctl-sec h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .ctl-sec p { margin: 0 0 6px; font-size: 12px; line-height: 1.35; color: #7a7466; }
+  .ctl { padding: 4px 0; }
+  .ctl-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding-bottom: 4px; }
+  .ctl-head span { color: #7a7466; font-variant-numeric: tabular-nums; }
+  .ctl-head span.warn { color: #c0392b; font-weight: 600; }
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .seg + h3 { margin-top: 10px; }
+  .seg button { flex: 1; min-width: 44px; font: 600 13px var(--font-ui); color: var(--ink); background: #efe6d3; border: 0; border-radius: 8px; padding: 7px 4px; cursor: pointer; }
+  .seg button.on { background: var(--cash); color: var(--paper); box-shadow: 0 2px 0 #2c7238; }
+  .seg button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   .maxed, .locked { font-size: 13px; font-weight: 600; min-width: 84px; text-align: center; color: #4f7a36; }
   .locked { color: #8a8374; }
   .toast {
@@ -300,6 +312,7 @@
   const KILN = { x: CX + 1360, front: CY + 1520, w: 180, d: 100 };
   const DEPOT = { x: CX + 420, front: CY + 1632, w: 240, d: 90 };
   const LAB = { x: CX - 350, front: CY + 900, w: 240, d: 110 };
+  const DISPATCH = { x: CX - 600, front: CY + 380, w: 170, d: 90 };
   // harbor: the sea runs along the north edge east of the reserve
   const SEA = { x0: CX + 620, y1: CY - 1870 };
   const CUSTOMS = { x: CX + 950, front: CY - 1420, w: 200, d: 100 };
@@ -374,6 +387,8 @@
     { id: 'pellets', group: 'industry', name: 'Pellet Press', hire: 'Build Pellet Press', costs: [3000, 8000], note: 'Spare chips into pellets (trains buy them)', more: 'Presses faster', needs: 'generator' },
     { id: 'pump', group: 'industry', name: 'Water Pump', hire: 'Build Water Pump', costs: [2500, 6000, 15000], note: 'Pipes water to the paper mill', more: 'Pumps faster', needs: 'industry' },
     { id: 'papermill', group: 'industry', name: 'Paper Mill', hire: 'Build Paper Mill', costs: [6000, 15000, 35000], note: 'Chips + water + power → paper', more: 'Makes paper faster', needs: 'industry' },
+    // dispatch office: you decide where wood goes
+    { id: 'dispatch', group: 'dispatch', name: 'Dispatch Office', hire: 'Build Dispatch Office', costs: [800], note: 'Control reserves, bot targets and the Tree Yard mix' },
     // research lab: projects take time and boost everything
     { id: 'lab', group: 'lab', name: 'Research Lab', hire: 'Build Research Lab', costs: [15000], note: 'Unlocks research projects' },
     { id: 'r_saw', group: 'lab', name: 'Laser Saws', costs: [8000, 20000], research: [45, 90], note: 'Sawmill & workshop +25% speed', needs: 'lab' },
@@ -408,6 +423,7 @@
     { id: 'east', name: 'Furniture District', ...P(1490, 0) },
     { id: 'rail', name: 'Rail Yard', ...P(-800, 1490) },
     { id: 'lab', name: 'Research Lab', ...P(-350, 1030) },
+    { id: 'dispatch', name: 'Dispatch Office', ...P(-600, 480) },
     { id: 'harbor', name: 'Harbor', ...P(1060, -1230) },
     { id: 'village', name: 'Pine Village', ...P(-1000, -650) },
   ];
@@ -511,6 +527,11 @@
   const stats = { earned: 0, sold: {}, goal: 0, contractsDone: 0 };
   let contract = null;                                              // { kind, need, have, time, reward }
   let ratePerMin = 0;
+  // player-controlled logistics settings (Dispatch Office)
+  const dispatch = { reserve: { wood: 0, oak: 0, redwood: 0 }, bots: 'any', trucks: 'redwood', yard: 'mixed' };
+  const RESERVE_STEPS = [0, 50, 100, 200, 400, 800];
+  const keep = kind => level.dispatch ? (dispatch.reserve[kind] || 0) : 0;   // logs held back in the warehouse for big orders
+  const spare = kind => Math.max(0, wh[kind] - keep(kind));                // what local uses may take
   let research = null;                                              // { id, t, total } while the lab works
   const vstock = { wood: 0, plank: 0, syrup: 0, chair: 0 };         // village store shelves
   const builder = { planks: 0, redwood: 0 };
@@ -619,12 +640,26 @@
   }
 
   // Tree yard: rows of pine and oak that grow back. Maple grove: maples that fill sap buckets.
+  function yardSpecies(i) {
+    if (level.dispatch && dispatch.yard === 'pine') return 'pine';
+    if (level.dispatch && dispatch.yard === 'oak') return 'oak';
+    return Math.floor(i / YARD.cols) % 2 ? 'oak' : 'pine';
+  }
+  // switch the yard over; standing trees are replanted with the new kind straight away
+  function applyYardMix() {
+    for (const n of nodes) {
+      if (!n.farm || n.reserve || n.yi === undefined) continue;
+      const species = yardSpecies(n.yi), sp = SPECIES[species];
+      if (n.species === species) continue;
+      n.species = species; n.r = sp.r; n.max = sp.hp; n.hp = n.hp > 0 ? sp.hp : 0; n.shake = 1;
+    }
+  }
   function ensureYard() {
     const have = nodes.filter(n => n.farm && !n.reserve).length;
     for (let i = have; i < yardSpots(); i++) {
       const row = Math.floor(i / YARD.cols), col = i % YARD.cols;
-      const species = row % 2 ? 'oak' : 'pine', sp = SPECIES[species];
-      nodes.push({ type: 'tree', species, farm: true, x: YARD.x + (col - (YARD.cols - 1) / 2) * YARD.gap + (row % 2) * 18,
+      const species = yardSpecies(i), sp = SPECIES[species];
+      nodes.push({ type: 'tree', species, farm: true, yi: i, x: YARD.x + (col - (YARD.cols - 1) / 2) * YARD.gap + (row % 2) * 18,
                    y: YARD.y + (row - (YARD.rows - 1) / 2) * 72, r: sp.r, hp: sp.hp, max: sp.hp, shake: 0, size: 0.95, seed: i / 48, grow: 1 });
     }
     const reds = nodes.filter(n => n.reserve).length;
@@ -960,14 +995,20 @@
         if (b.load.length >= cap) { b.state = 'return'; continue; }
         if (!b.target || b.target.hp <= 0) {
           // nearest standing tree no other machine is on; the truck heads for redwoods first
-          let best = null, bd = Infinity;
-          for (const n of nodes) {
-            if (n.type !== 'tree' || n.hp <= 0 || bots.some(o => o !== b && o.target === n)) continue;
-            if (!st.big && n.species === 'redwood') continue;
-            const d = Math.hypot(n.x - b.x, n.y - b.y) - (st.big && n.species === 'redwood' ? 700 : 0);
-            if (d < bd) { bd = d; best = n; }
-          }
-          b.target = best;
+          const want = st.big ? dispatch.trucks : dispatch.bots;
+          const pick = strict => {
+            let best = null, bd = Infinity;
+            for (const n of nodes) {
+              if (n.type !== 'tree' || n.hp <= 0 || bots.some(o => o !== b && o.target === n)) continue;
+              if (!st.big && n.species === 'redwood') continue;
+              const sp = n.species === 'pine' ? 'wood' : n.species;
+              if (strict && level.dispatch && want !== 'any' && sp !== want) continue;
+              const d = Math.hypot(n.x - b.x, n.y - b.y);
+              if (d < bd) { bd = d; best = n; }
+            }
+            return best;
+          };
+          b.target = pick(true) || pick(false);
         }
         if (!b.target) {
           if (b.load.length) b.state = 'return';
@@ -1122,6 +1163,8 @@
       if (level.shack && shack.sap + pending.shack < SHACK_CAP) { pending.shack++; return 'shack'; }
       return null;
     }
+    const palletRoom = level.warehouse && sum(pallet) + sum(pending.pallet) < palletCap();
+    if (palletRoom && keep(kind) && wh[kind] + pallet[kind] + pending.pallet[kind] < keep(kind)) { pending.pallet[kind]++; return 'pallet'; }
     if (kind !== 'redwood' && stock[kind] + pending.shelf[kind] < shelfCap()) { pending.shelf[kind]++; return 'shelf'; }
     if (level.sawmill && sawIn() + pending.saw < sawCap()) { pending.saw++; return 'saw'; }
     if (level.warehouse && sum(pallet) + sum(pending.pallet) < palletCap()) { pending.pallet[kind]++; return 'pallet'; }
@@ -1146,7 +1189,7 @@
   function pickRefill() {
     let best = null, bf = Infinity;
     for (const kind of ['wood', 'oak']) {
-      if (wh[kind] <= 0 || stock[kind] + pending.shelf[kind] >= shelfCap()) continue;
+      if (spare(kind) <= 0 || stock[kind] + pending.shelf[kind] >= shelfCap()) continue;
       const f = stock[kind] + pending.shelf[kind];
       if (f < bf) { bf = f; best = kind; }
     }
@@ -1306,10 +1349,12 @@
     const items = UPGRADES.filter(u => u.group === panelGroup.id);
     // only rebuild when something visible changed, so buttons don't flicker under a finger
     const key = items.map(u => level[u.id] + (cash >= (u.costs[level[u.id]] ?? Infinity) ? 'y' : 'n')).join('|') +
+      (panelGroup.id === 'dispatch' ? JSON.stringify(dispatch) + LOGS.map(k => Math.floor(wh[k] / 10) + ':' + stock[k]).join() : '') +
       (research ? research.id + Math.ceil(research.total - research.t) : '');
     if (key === panelKey) return;
     panelKey = key;
-    ui.panelList.innerHTML = items.map(u => {
+    const controls = panelGroup.id === 'dispatch' && level.dispatch ? dispatchControls() : '';
+    ui.panelList.innerHTML = controls + items.map(u => {
       const lv = level[u.id], max = lv >= u.costs.length, blocked = u.needs && !level[u.needs];
       const cost = u.costs[lv];
       const dots = u.costs.length > 1 ? `<span class="dots">${u.costs.map((_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>` : '';
@@ -1333,7 +1378,32 @@
   ui.panelList.addEventListener('click', e => {
     const b = e.target.closest('[data-buy]');
     if (b) buy(b.dataset.buy);
+    const c = e.target.closest('[data-set]');
+    if (c) {
+      const [group, key] = c.dataset.set.split('.'), val = c.dataset.val;
+      if (key) dispatch[group][key] = Number(val); else dispatch[group] = val;
+      if (group === 'yard') applyYardMix();
+      for (const bt of bots) bt.target = null;     // bots re-pick with the new orders
+      bumps.dispatch = performance.now();
+      panelKey = ''; renderPanel(); save(true);
+    }
   });
+
+  const seg = (set, options, current) => `<div class="seg">${options.map(([val, label]) =>
+    `<button type="button" data-set="${set}" data-val="${val}" class="${String(current) === String(val) ? 'on' : ''}">${label}</button>`).join('')}</div>`;
+  function dispatchControls() {
+    const name = { wood: 'Pine', oak: 'Oak', redwood: 'Redwood' };
+    const rows = LOGS.map(k => {
+      const r = dispatch.reserve[k], low = r && wh[k] < r;
+      return `<div class="ctl"><div class="ctl-head"><b>${name[k]}</b><span class="${low ? 'warn' : ''}">Warehouse ${wh[k]}${r ? ` / keep ${r}` : ''}${k !== 'redwood' ? ` · shelf ${stock[k]}` : ''}</span></div>` +
+        seg(`reserve.${k}`, RESERVE_STEPS.map(v => [v, v || 'None']), r) + '</div>';
+    }).join('');
+    return `<div class="ctl-sec"><h3>Keep for big orders</h3><p>New logs top up this amount in the warehouse first. Shelves, the sawmill and village vans only use what's above it. Trucks, trains and ships can use all of it.</p>${rows}</div>` +
+      `<div class="ctl-sec"><h3>Lumber bots chop</h3>${seg('bots', [['any', 'Nearest'], ['wood', 'Pine'], ['oak', 'Oak']], dispatch.bots)}` +
+      `<h3>Logging trucks chop</h3>${seg('trucks', [['redwood', 'Redwood'], ['any', 'Nearest'], ['wood', 'Pine'], ['oak', 'Oak']], dispatch.trucks)}` +
+      `<p>If none of that kind is left standing, they chop the nearest tree.</p></div>` +
+      `<div class="ctl-sec"><h3>Tree Yard grows</h3>${seg('yard', [['pine', 'All pine'], ['mixed', 'Half & half'], ['oak', 'All oak']], dispatch.yard)}</div>`;
+  }
 
   function afterUpgrade() {
     ensureBots(); ensureYard(); ensureHaulers(); ensureVans(); ensureHouses();
@@ -1360,7 +1430,7 @@
     // it pulls logs from the warehouse when it runs low, best wood first
     timers.sawPull -= dt;
     if (level.warehouse && sawIn() + pending.saw < 8 && timers.sawPull <= 0) {
-      const kind = ['redwood', 'oak', 'wood'].find(k => wh[k] > 0);
+      const kind = ['redwood', 'oak', 'wood'].find(k => spare(k) > 0);
       if (kind) {
         timers.sawPull = 0.3;
         wh[kind]--; pending.saw++;
@@ -1790,7 +1860,7 @@
       pick: n => { saw.chips -= n; }, need: () => FUEL_CAP - gen.fuel, dst: () => ({ x: GEN.x, y: GEN.front + 30 }), drop: n => { gen.fuel = Math.min(FUEL_CAP, gen.fuel + n); } },
     { id: 'pulp', kind: 'chips', from: () => level.sawmill && level.papermill, take: () => saw.chips, src: () => ({ x: SAW.x + 64, y: SAW.front + 30 }),
       pick: n => { saw.chips -= n; }, need: () => MILL_CAP - mill.chips, dst: () => ({ x: MILL.x, y: MILL.front + 30 }), drop: n => { mill.chips = Math.min(MILL_CAP, mill.chips + n); } },
-    { id: 'oak', kind: 'oak', from: () => level.warehouse && level.charcoal, take: () => wh.oak, src: () => ({ x: WH_IN.x, y: WH_IN.y + 60 }),
+    { id: 'oak', kind: 'oak', from: () => level.warehouse && level.charcoal, take: () => spare('oak'), src: () => ({ x: WH_IN.x, y: WH_IN.y + 60 }),
       pick: n => { wh.oak -= n; }, need: () => KILN_IN_CAP - coalKiln.oak, dst: () => ({ x: KILN.x, y: KILN.front + 30 }), drop: n => { coalKiln.oak = Math.min(KILN_IN_CAP, coalKiln.oak + n); } },
     { id: 'coal', kind: 'charcoal', from: () => level.charcoal && level.shack, take: () => coalKiln.out, src: () => ({ x: KILN.x, y: KILN.front + 30 }),
       pick: n => { coalKiln.out -= n; }, need: () => SHACK_COAL_CAP - shack.coal, dst: () => ({ x: SHACK.x, y: SHACK.front + 30 }), drop: n => { shack.coal = Math.min(SHACK_COAL_CAP, shack.coal + n); } },
@@ -1799,14 +1869,14 @@
   const vRoute = (id, kind, from, take, pick, src) => ({ id, kind, from: () => level.vstore && from(), take, src, pick,
     need: () => vstoreCap() - vstock[kind], dst: vDst, drop: n => { vstock[kind] = Math.min(vstoreCap(), vstock[kind] + n); } });
   ROUTES.push(
-    vRoute('v-wood', 'wood', () => level.warehouse, () => wh.wood, n => { wh.wood -= n; }, () => ({ x: WH_IN.x, y: WH_IN.y + 60 })),
+    vRoute('v-wood', 'wood', () => level.warehouse, () => spare('wood'), n => { wh.wood -= n; }, () => ({ x: WH_IN.x, y: WH_IN.y + 60 })),
     vRoute('v-plank', 'plank', () => level.sawmill, () => saw.out, n => { saw.out -= n; }, () => ({ x: SAW.x + 64, y: SAW.front + 30 })),
     vRoute('v-syrup', 'syrup', () => level.shack, () => shack.out, n => { shack.out -= n; }, () => ({ x: SHACK.x, y: SHACK.front + 30 })),
     vRoute('v-chair', 'chair', () => level.workshop, () => workshop.chair, n => { workshop.chair -= n; }, () => ({ x: WORKSHOP.x, y: WORKSHOP.front + 30 })),
     { id: 'b-plank', kind: 'plank', from: () => level.builder && level.sawmill, take: () => saw.out, src: () => ({ x: SAW.x + 64, y: SAW.front + 30 }),
       pick: n => { saw.out -= n; }, need: () => BUILDER_CAP.plank - builder.planks, dst: () => ({ x: BUILDER.x, y: BUILDER.front + 20 }),
       drop: n => { builder.planks = Math.min(BUILDER_CAP.plank, builder.planks + n); } },
-    { id: 'b-red', kind: 'redwood', from: () => level.builder && level.warehouse, take: () => wh.redwood, src: () => ({ x: WH_IN.x, y: WH_IN.y + 60 }),
+    { id: 'b-red', kind: 'redwood', from: () => level.builder && level.warehouse, take: () => spare('redwood'), src: () => ({ x: WH_IN.x, y: WH_IN.y + 60 }),
       pick: n => { wh.redwood -= n; }, need: () => BUILDER_CAP.redwood - builder.redwood, dst: () => ({ x: BUILDER.x, y: BUILDER.front + 20 }),
       drop: n => { builder.redwood = Math.min(BUILDER_CAP.redwood, builder.redwood + n); } },
   );
@@ -2402,7 +2472,7 @@
     LOGS.forEach((k, i) => {
       const x = mid - 80 + i * 66;
       drawItem(k, x, sy0 - wallH + 54);
-      flatLabel(`${wh[k]}`, x + 26, sy0 - wallH + 54, 15, '#5a4630');
+      flatLabel(`${wh[k]}`, x + 26, sy0 - wallH + 54, 15, keep(k) && wh[k] < keep(k) ? '#c0392b' : '#5a4630');
     });
   }
   function drawAnnexBack() {
@@ -2492,6 +2562,7 @@
     { key: 'papermill', B: MILL, ids: ['papermill'], wall: '#d9d2c2', roof: '#5f6b7a', floor: '#b9b4a8', H: 78, draw: () => drawPaperMill() },
     { key: 'depot', B: DEPOT, ids: ['depot', 'vans', 'vanpro'], wall: '#d9d2c2', roof: '#3d6fa8', floor: '#a9a59a', H: 70, door: 200, garage: true, draw: () => drawDepot() },
     { key: 'hq', B: HQ, ids: ['hq'], wall: '#e9e4da', roof: '#3c4654', floor: '#cfc6b5', H: () => (2 + level.hq) * 34, door: 60, office: true, draw: () => drawHQ(), top: hqFlag },
+    { key: 'dispatch', B: DISPATCH, ids: ['dispatch'], wall: '#d9d2c2', roof: '#3d6fa8', floor: '#c9c1ae', H: 66, door: 60, draw: () => drawDispatch(), top: dispatchMast },
     { key: 'lab', B: LAB, ids: ['lab'], wall: '#e9eef2', roof: '#5f6b7a', floor: '#d9dfe3', H: 74, door: 70, draw: () => drawLab(), top: labDish },
     { key: 'harbor', B: CUSTOMS, ids: ['harbor', 'cranes', 'shipping'], wall: '#3d6fa8', roof: '#2b3a4a', floor: '#c3b598', H: 70, arched: true, draw: () => drawCustoms() },
     { key: 'vstore', B: VSTORE, ids: ['vstore'], wall: '#e9d8b4', roof: '#8a3b2e', floor: '#b49a74', H: 70, door: 80, draw: () => drawVStore() },
@@ -2599,6 +2670,28 @@
     for (const t of R.tags || []) tag(...t);
   }
 
+  function dispatchMast(sx, sy, back, H) {
+    ctx.fillStyle = '#5f646c'; ctx.fillRect(sx + 50, sy - back - H - 44, 3, 44);
+    const blink = Math.sin(performance.now() / 250) > 0;
+    ctx.fillStyle = blink ? '#ff6a5a' : '#7a3428'; ctx.beginPath(); ctx.arc(sx + 51.5, sy - back - H - 46, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+  function drawDispatch() {
+    const [sx, sy, back] = shed(DISPATCH.x, DISPATCH.front, DISPATCH.w, DISPATCH.d);
+    // wall board: warehouse stock against each reserve
+    const bx = sx - 60, by = sy - back - 52;
+    ctx.fillStyle = '#fffaf0'; ctx.fillRect(bx, by, 120, 44);
+    ctx.strokeStyle = '#5f646c'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, 120, 44);
+    LOGS.forEach((k, i) => {
+      const r = dispatch.reserve[k] || 200, f = Math.min(1, wh[k] / r);
+      drawItem(k, bx + 14, by + 9 + i * 13);
+      ctx.fillStyle = '#e2d8c3'; ctx.fillRect(bx + 28, by + 6 + i * 13, 84, 7);
+      ctx.fillStyle = dispatch.reserve[k] && wh[k] < dispatch.reserve[k] ? '#d9644a' : '#3f9d4f';
+      ctx.fillRect(bx + 28, by + 6 + i * 13, 84 * f, 7);
+    });
+    worker(sx + 40, sy - back * 0.5, '#3d6fa8', true, '#4a2c1a');
+    ctx.fillStyle = '#8a6a43'; ctx.fillRect(sx + 14, sy - back * 0.5 + 2, 56, 8);
+    tag('DISPATCH', sx, sy - back - 110, 15, '#cfe6ff', '#2b3a4a');
+  }
   function labDish(sx, sy, back, H) {
     // rooftop dish that slowly turns while research runs
     const a = research ? Math.sin(performance.now() / 900) * 0.5 : 0;
@@ -3768,7 +3861,7 @@
       workshop: { planks: workshop.planks, chair: workshop.chair, table: workshop.table }, showroom: { ...showroom },
       gen: { fuel: gen.fuel, pellets: gen.pellets }, mill: { chips: mill.chips, water: Math.floor(mill.water), out: mill.out },
       coalKiln: { oak: coalKiln.oak, out: coalKiln.out }, shackCoal: shack.coal, chips: saw.chips,
-      stats, contract, research, vstock: { ...vstock }, builder: { ...builder },
+      stats, contract, research, dispatch, vstock: { ...vstock }, builder: { ...builder },
       houses: houses.map(h => ({ s: h.state, p: Math.round(h.p * 100) / 100 })),
       level: { ...level }, paid: { ...paid }, cash, piles: { ...pileAmt }, served,
       hp: nodes.map(n => n.type === 'maple' ? Math.round(n.sap * 100) / 100 : n.hp),
@@ -3794,6 +3887,7 @@
     if (d.stats) { Object.assign(stats, d.stats); stats.sold = { ...(d.stats.sold || {}) }; }
     contract = d.contract || null;
     research = d.research || null;
+    if (d.dispatch) { Object.assign(dispatch, d.dispatch); dispatch.reserve = { wood: 0, oak: 0, redwood: 0, ...(d.dispatch.reserve || {}) }; }
     merge(vstock, d.vstock); merge(builder, d.builder);
     merge(level, d.level); merge(paid, d.paid);
     cash = d.cash; served = d.served;
@@ -3801,6 +3895,7 @@
     for (const id in paid) { cash += paid[id] || 0; paid[id] = 0; }
     vans = []; ensureVans();
     houses = []; ensureHouses();
+    applyYardMix();
     (d.houses || []).forEach((h, i) => { if (houses[i]) { houses[i].state = h.s; houses[i].p = h.p; } });
     villagers = [];
     if (d.piles) merge(pileAmt, d.piles); else pileAmt.store = d.pile || 0;

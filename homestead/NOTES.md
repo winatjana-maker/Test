@@ -38,6 +38,10 @@ Read this first when picking the project back up.
   - Industrial Park (south-east): generator/power, paper mill, pump, charcoal kiln, pellet press, van depot + delivery vans
   - Harbor (north-east coast, `SEA`): cargo ships (`updateShip`) load mixed exports via `TRAIN_SRC` and pay 3×; cranes and shipping lines are upgrades
   - Pine Village (north-west): village store you walk into (`VSTORE`), villagers (`updateVillagers`), builder's yard that turns van-delivered planks + redwood into houses on 16 plots; houses pay rent and add villagers
+- **Dispatch Office** (`DISPATCH`, tile `P(-600, 480)`): the player controls material flow with `dispatch` settings, which are saved.
+  - Reserves: `keep(kind)`/`spare(kind)`. New logs fill the warehouse up to the reserve first; shelves, the sawmill and village vans only use what's above it. Trucks, trains and ships can use all of it.
+  - Bot and truck targeting: `dispatch.bots` / `dispatch.trucks`. If none of that kind is standing, they chop the nearest tree.
+  - Tree Yard mix: `dispatch.yard` sets species through `yardSpecies(i)` / `applyYardMix()`.
 - **Research Lab** (in town, `LAB`): research upgrades take time (`research` state); effects via `rSaw`, `rEng`, `rMarket`, `rGrowth`, `rLog`, `rPower`.
 - **Logistics:**
   - Vans run the `ROUTES` table (chips → generator/paper mill, oak → charcoal kiln, charcoal → shack).

@@ -155,6 +155,18 @@
   .up button:disabled { background: #b9b2a2; box-shadow: 0 3px 0 #9a9384; cursor: default; }
   .up button:not(:disabled):active { transform: translateY(2px); box-shadow: none; }
   .up button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .ctl-sec { border-top: 1px solid #ece3d0; padding: 8px 0; }
+  .ctl-sec h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .ctl-sec p { margin: 0 0 6px; font-size: 12px; line-height: 1.35; color: #7a7466; }
+  .ctl { padding: 4px 0; }
+  .ctl-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding-bottom: 4px; }
+  .ctl-head span { color: #7a7466; font-variant-numeric: tabular-nums; }
+  .ctl-head span.warn { color: #c0392b; font-weight: 600; }
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .seg + h3 { margin-top: 10px; }
+  .seg button { flex: 1; min-width: 44px; font: 600 13px var(--font-ui); color: var(--ink); background: #efe6d3; border: 0; border-radius: 8px; padding: 7px 4px; cursor: pointer; }
+  .seg button.on { background: var(--cash); color: var(--paper); box-shadow: 0 2px 0 #2c7238; }
+  .seg button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   .maxed, .locked { font-size: 13px; font-weight: 600; min-width: 84px; text-align: center; color: #4f7a36; }
   .locked { color: #8a8374; }
   .toast {
