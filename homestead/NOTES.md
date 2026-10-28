@@ -25,11 +25,20 @@ Read this first when picking the project back up.
 
 - **Resources:** pine (`wood`), oak, redwood, maple sap → syrup, planks, chairs/tables, wood chips, water, paper, pellets, charcoal.
 - **Town:** store (2 lanes), restock zone, pallet yard → forklifts → warehouse + annex → conveyor to the shelves, tree yard, maple grove + sugar shack, sawmill (+ drying kiln), loading dock (truck orders), Head Office (sale multiplier), billboards, cash drone.
+- **Roofed buildings (`ROOFED`):** sawmill, sugar shack, workshop, generator, paper mill, depot, HQ, station, lab, harbor office, village store.
+  - Each draws three depth layers: `drawBase` (floor + back wall), the interior (`R.draw`), and `drawRoof` (front wall + roof).
+  - The roof fades when the player is inside or behind (`updateRoofs`).
+  - Walls are collision boxes with a door gap (`wallBoxes`).
+  - Tags drawn inside an interior are deferred with `tagSink` so they render above the roof.
+- **Juice:** `bounceWrap` (building bounce on upgrade), `shake()`, falling-tree fx (`drawFall`), dust chips, walk cycle with arms in `drawPerson`.
 - **Districts (bought deeds):**
   - Redwood Reserve (north)
   - Furniture District (east): workshop + showroom with buyer cars
   - Rail Yard (south): freight trains pay 2×
   - Industrial Park (south-east): generator/power, paper mill, pump, charcoal kiln, pellet press, van depot + delivery vans
+  - Harbor (north-east coast, `SEA`): cargo ships (`updateShip`) load mixed exports via `TRAIN_SRC` and pay 3×; cranes and shipping lines are upgrades
+  - Pine Village (north-west): village store you walk into (`VSTORE`), villagers (`updateVillagers`), builder's yard that turns van-delivered planks + redwood into houses on 16 plots; houses pay rent and add villagers
+- **Research Lab** (in town, `LAB`): research upgrades take time (`research` state); effects via `rSaw`, `rEng`, `rMarket`, `rGrowth`, `rLog`, `rPower`.
 - **Logistics:**
   - Vans run the `ROUTES` table (chips → generator/paper mill, oak → charcoal kiln, charcoal → shack).
   - Other flows use flying items.
@@ -38,7 +47,7 @@ Read this first when picking the project back up.
   - 12 group tiles (`GROUPS`). Standing on one opens a DOM panel to buy upgrades (`UPGRADES` entries carry a `group`).
   - Mini map, $/min chip, contract + milestone card (`MILESTONES`, `newContract`), toast.
   - A "+$100 test" button that must be **removed before release**.
-- **Save:** `snapshot()`/`applySave()`, version `v: 10`. Stored in localStorage and in the account db at `data/users/<id>/save`.
+- **Save:** `snapshot()`/`applySave()`, version `v: 10` (fields added since are optional). Stored in localStorage and in the account db at `data/users/<id>/save`.
 
 ## How I test
 
