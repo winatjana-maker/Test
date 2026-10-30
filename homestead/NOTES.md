@@ -45,6 +45,7 @@ Read this first when picking the project back up.
   - Tree Yard mix: `dispatch.yard` sets species through `yardSpecies(i)` / `applyYardMix()`.
   - Sawmill log choice `dispatch.saw` (`sawKinds()`), plank priority `dispatch.planks` (`plankHold()` keeps planks at the sawmill for village vans/exports), oak priority `dispatch.oak` (`shelfLimit()`, `kilnHungry()`), charcoal priority `dispatch.coal` (`coalHold()`).
 - **Feeders:** Log Feeder (`sawfeed`) speeds warehouse → sawmill pulls; Oak Feeder (`kilnfeed`) lets the charcoal kiln pull oak from the warehouse and holds more. Sawmill goes to Lv 8, charcoal kiln to Lv 6.
+- **Syrup:** Sap Tapper (1 worker) + Sap Bots (`sapbots`, up to 4 robot tappers, hauler id `sapbot`, use the tapper's level for speed/cap); Bigger Buckets (`buckets`, +1 sap per tap); Evaporator (`evap`, extra bottles per boil via `evapBonus()`); Sugar Shack to Lv 6 with `shackCap()`/`shackOutCap()`/`syrupGap()`.
 - **Research Lab** (in town, `LAB`): research upgrades take time (`research` state); effects via `rSaw`, `rEng`, `rMarket`, `rGrowth`, `rLog`, `rPower`.
 - **Logistics:**
   - Vans run the `ROUTES` table (chips → generator/paper mill, oak → charcoal kiln, charcoal → shack).
