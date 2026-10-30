@@ -42,6 +42,8 @@ Read this first when picking the project back up.
   - Reserves: `keep(kind)`/`spare(kind)`. New logs fill the warehouse up to the reserve first; shelves, the sawmill and village vans only use what's above it. Trucks, trains and ships can use all of it.
   - Bot and truck targeting: `dispatch.bots` / `dispatch.trucks`. If none of that kind is standing, they chop the nearest tree.
   - Tree Yard mix: `dispatch.yard` sets species through `yardSpecies(i)` / `applyYardMix()`.
+  - Sawmill log choice `dispatch.saw` (`sawKinds()`), plank priority `dispatch.planks` (`plankHold()` keeps planks at the sawmill for village vans/exports), oak priority `dispatch.oak` (`shelfLimit()`, `kilnHungry()`), charcoal priority `dispatch.coal` (`coalHold()`).
+- **Feeders:** Log Feeder (`sawfeed`) speeds warehouse → sawmill pulls; Oak Feeder (`kilnfeed`) lets the charcoal kiln pull oak from the warehouse and holds more. Sawmill goes to Lv 8, charcoal kiln to Lv 6.
 - **Research Lab** (in town, `LAB`): research upgrades take time (`research` state); effects via `rSaw`, `rEng`, `rMarket`, `rGrowth`, `rLog`, `rPower`.
 - **Logistics:**
   - Vans run the `ROUTES` table (chips → generator/paper mill, oak → charcoal kiln, charcoal → shack).
@@ -72,7 +74,7 @@ Never ship the debug handle.
 3. Remove the test cash button for release.
 4. More van routes (e.g. paper → warehouse/dock, planks → workshop by van instead of flying).
 5. Ideas the player hasn't chosen yet:
-   - prestige ("sell the business, move to a new world")
+   - **prestige** ("sell the business, move to a new world"): the player picked this as the NEXT step
    - second store
    - apples/cider
    - sound

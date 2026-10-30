@@ -360,7 +360,8 @@
     { id: 'shack', group: 'maple', name: 'Sugar Shack', hire: 'Build Sugar Shack', costs: [200, 400, 800, 2000], note: 'Boils sap into syrup', more: 'Boils faster', needs: 'grove' },
     { id: 'tapper', group: 'maple', name: 'Sap Tapper', hire: 'Hire Sap Tapper', costs: [200, 350, 600, 1500], note: 'Collects sap for you', more: 'Faster, carries more', needs: 'shack' },
     // sawmill
-    { id: 'sawmill', group: 'sawmill', name: 'Sawmill', hire: 'Build Sawmill', costs: [250, 500, 900, 2500, 6000], note: 'Logs into planks (and wood chips)', more: 'Cuts faster' },
+    { id: 'sawmill', group: 'sawmill', name: 'Sawmill', hire: 'Build Sawmill', costs: [250, 500, 900, 2500, 6000, 15000, 40000, 100000], note: 'Logs into planks (and wood chips)', more: 'Cuts faster' },
+    { id: 'sawfeed', group: 'sawmill', name: 'Log Feeder', hire: 'Build Log Feeder', costs: [2500, 8000, 25000], note: 'Warehouse logs reach the sawmill faster', more: 'Feeds faster', needs: 'sawmill' },
     { id: 'kiln', group: 'sawmill', name: 'Drying Kiln', hire: 'Build Drying Kiln', costs: [1500, 4000], note: 'Planks sell for +$4', more: 'Planks sell for +$8', needs: 'sawmill' },
     // warehouse & logistics
     { id: 'warehouse', group: 'warehouse', name: 'Warehouse', hire: 'Build Warehouse', costs: [100, 250, 600, 2000, 5000], note: 'Stores extra logs', more: 'Holds more' },
@@ -407,7 +408,8 @@
     { id: 'builder', group: 'village', name: "Builder's Yard", hire: "Build Builder's Yard", costs: [10000], note: 'Builds houses from planks & redwood (vans deliver)', needs: 'village' },
     { id: 'housing', group: 'village', name: 'House Plots', hire: 'Survey More Plots', costs: [8000, 20000, 45000], note: '+4 house plots', needs: 'builder' },
     { id: 'crew', group: 'village', name: 'Construction Crew', hire: 'Hire a Crew', costs: [5000, 15000], note: 'Build faster', more: 'Build two houses at once', needs: 'builder' },
-    { id: 'charcoal', group: 'industry', name: 'Charcoal Kiln', hire: 'Build Charcoal Kiln', costs: [3000, 8000, 20000], note: 'Oak → charcoal; doubles syrup speed', more: 'Burns faster', needs: 'industry' },
+    { id: 'charcoal', group: 'industry', name: 'Charcoal Kiln', hire: 'Build Charcoal Kiln', costs: [3000, 8000, 20000, 45000, 90000, 180000], note: 'Oak → charcoal; doubles syrup speed', more: 'Burns faster', needs: 'industry' },
+    { id: 'kilnfeed', group: 'industry', name: 'Oak Feeder', hire: 'Build Oak Feeder', costs: [4000, 12000, 30000], note: 'Kiln pulls oak straight from the warehouse', more: 'Feeds faster, holds more oak', needs: 'charcoal' },
   ];
   const GROUPS = [
     { id: 'you', name: 'Your Skills', ...P(-370, 210) },
@@ -464,14 +466,21 @@
   const pelletTime = () => [2, 2, 1][level.pellets];
   const pumpRate = () => [0, 1, 2, 4][level.pump];                   // water per second
   const paperTime = () => [3, 3, 1.8, 1][level.papermill];            // 2 chips + 1 water → 1 ream
-  const coalTime = () => [4, 4, 2.5, 1.5][level.charcoal];            // 1 oak → 2 charcoal
+  const coalTime = () => [4, 4, 2.5, 1.5, 1, 0.65, 0.4][level.charcoal];            // 1 oak → 2 charcoal
   const CHIP_CAP = 80, FUEL_CAP = 60, MILL_CAP = 40, WATER_CAP = 40, OUT_CAP = 60, KILN_IN_CAP = 30, SHACK_COAL_CAP = 30;
   const yardSpots = () => [0, 12, 24, 48, 60][level.farm];
   const growTime = () => [25, 25, 18, 12, 8][level.farm];
   const groveSpots = () => [0, 6, 10, 15, 20, 25][level.grove];
   const sapTime = () => [20, 20, 14, 9, 7, 5][level.grove];            // seconds for a maple's bucket to fill
-  const sawTime = () => [2, 2, 1.2, 0.6, 0.35, 0.2][level.sawmill];
-  const sawCap = () => [20, 20, 30, 40, 60, 80][level.sawmill];
+  const sawTime = () => [2, 2, 1.2, 0.6, 0.35, 0.2, 0.13, 0.09, 0.06][level.sawmill];
+  const sawCap = () => [20, 20, 30, 40, 60, 80, 100, 130, 160][level.sawmill];
+  const sawOutCap = () => [60, 60, 60, 60, 60, 60, 90, 120, 150][level.sawmill];
+  const sawOutGap = () => [0.2, 0.2, 0.2, 0.15, 0.1, 0.08, 0.06, 0.05, 0.04][level.sawmill];   // seconds between planks leaving
+  const feedGap = () => [0.3, 0.15, 0.08, 0.04][level.sawfeed];        // warehouse → sawmill
+  const feedLow = () => [8, 20, 35, 50][level.sawfeed];
+  const coalOutCap = () => [60, 60, 60, 60, 90, 120, 160][level.charcoal];
+  const kilnInCap = () => [30, 50, 80, 120][level.kilnfeed];
+  const kilnGap = () => [0, 0.6, 0.3, 0.15][level.kilnfeed];
   const boilTime = () => [3, 3, 1.8, 1, 0.5][level.shack];            // two sap → one bottle
   const reserveSpots = () => [0, 8, 16, 24, 32][level.reserve];
   const reserveGrow = () => [60, 60, 45, 30, 20][level.reserve];
@@ -528,10 +537,23 @@
   let contract = null;                                              // { kind, need, have, time, reward }
   let ratePerMin = 0;
   // player-controlled logistics settings (Dispatch Office)
-  const dispatch = { reserve: { wood: 0, oak: 0, redwood: 0 }, bots: 'any', trucks: 'redwood', yard: 'mixed' };
+  const dispatch = { reserve: { wood: 0, oak: 0, redwood: 0 }, bots: 'any', trucks: 'redwood', yard: 'mixed',
+    saw: 'best', planks: 'mixed', oak: 'shelf', coal: 'shack' };
   const RESERVE_STEPS = [0, 50, 100, 200, 400, 800];
   const keep = kind => level.dispatch ? (dispatch.reserve[kind] || 0) : 0;   // logs held back in the warehouse for big orders
   const spare = kind => Math.max(0, wh[kind] - keep(kind));                // what local uses may take
+  const SAW_ORDER = { best: ['redwood', 'oak', 'wood'], nopine: ['redwood', 'oak'], wood: ['wood'], oak: ['oak'], redwood: ['redwood'] };
+  let kilnPend = 0;
+  // oak is held for the charcoal kiln while it's hungry ("Oak goes first to: Charcoal kiln")
+  const kilnHungry = () => level.charcoal && dispatch.oak === 'kiln' && coalKiln.oak + kilnPend < kilnInCap() * 0.66;
+  const sawKinds = () => (SAW_ORDER[dispatch.saw] || SAW_ORDER.best).filter(k => k !== 'oak' || !kilnHungry());
+  const shelfLimit = kind => {
+    if (kind !== 'oak' || !level.charcoal) return shelfCap();
+    if (dispatch.oak === 'even') return Math.ceil(shelfCap() / 2);
+    return kilnHungry() ? 0 : shelfCap();
+  };
+  const plankHold = () => ({ village: 30, export: 40 })[dispatch.planks] || 0;   // planks kept at the sawmill for vans / exports
+  const coalHold = () => ({ even: 20, export: 45 })[dispatch.coal] || 0;          // charcoal kept at the kiln for exports
   let research = null;                                              // { id, t, total } while the lab works
   const vstock = { wood: 0, plank: 0, syrup: 0, chair: 0 };         // village store shelves
   const builder = { planks: 0, redwood: 0 };
@@ -553,7 +575,7 @@
   const truck = { state: 'away', t: 6, x: 0, face: 1, order: null, got: null };
   const fx = [];
   const gather = { node: null, t: 0 };
-  const timers = { drop: 0, sawDrop: 0, shackDrop: 0, collect: 0, pay: 0, refill: 0, full: 0, saw: 0, sawPull: 0, syrup: 0, ws: 0, rate: 0 };
+  const timers = { kilnPull: 0, drop: 0, sawDrop: 0, shackDrop: 0, collect: 0, pay: 0, refill: 0, full: 0, saw: 0, sawPull: 0, syrup: 0, ws: 0, rate: 0 };
   const tileState = { id: null, wait: 0, lock: null };
 
   const palletCount = () => [1, 2, 4, 6][level.palletyard];
@@ -1165,8 +1187,8 @@
     }
     const palletRoom = level.warehouse && sum(pallet) + sum(pending.pallet) < palletCap();
     if (palletRoom && keep(kind) && wh[kind] + pallet[kind] + pending.pallet[kind] < keep(kind)) { pending.pallet[kind]++; return 'pallet'; }
-    if (kind !== 'redwood' && stock[kind] + pending.shelf[kind] < shelfCap()) { pending.shelf[kind]++; return 'shelf'; }
-    if (level.sawmill && sawIn() + pending.saw < sawCap()) { pending.saw++; return 'saw'; }
+    if (kind !== 'redwood' && stock[kind] + pending.shelf[kind] < shelfLimit(kind)) { pending.shelf[kind]++; return 'shelf'; }
+    if (level.sawmill && sawKinds().includes(kind) && sawIn() + pending.saw < sawCap()) { pending.saw++; return 'saw'; }
     if (level.warehouse && sum(pallet) + sum(pending.pallet) < palletCap()) { pending.pallet[kind]++; return 'pallet'; }
     return null;
   }
@@ -1189,7 +1211,7 @@
   function pickRefill() {
     let best = null, bf = Infinity;
     for (const kind of ['wood', 'oak']) {
-      if (spare(kind) <= 0 || stock[kind] + pending.shelf[kind] >= shelfCap()) continue;
+      if (spare(kind) <= 0 || stock[kind] + pending.shelf[kind] >= shelfLimit(kind)) continue;
       const f = stock[kind] + pending.shelf[kind];
       if (f < bf) { bf = f; best = kind; }
     }
@@ -1402,7 +1424,15 @@
       `<div class="ctl-sec"><h3>Lumber bots chop</h3>${seg('bots', [['any', 'Nearest'], ['wood', 'Pine'], ['oak', 'Oak']], dispatch.bots)}` +
       `<h3>Logging trucks chop</h3>${seg('trucks', [['redwood', 'Redwood'], ['any', 'Nearest'], ['wood', 'Pine'], ['oak', 'Oak']], dispatch.trucks)}` +
       `<p>If none of that kind is left standing, they chop the nearest tree.</p></div>` +
-      `<div class="ctl-sec"><h3>Tree Yard grows</h3>${seg('yard', [['pine', 'All pine'], ['mixed', 'Half & half'], ['oak', 'All oak']], dispatch.yard)}</div>`;
+      `<div class="ctl-sec"><h3>Tree Yard grows</h3>${seg('yard', [['pine', 'All pine'], ['mixed', 'Half & half'], ['oak', 'All oak']], dispatch.yard)}</div>` +
+      (level.sawmill ? `<div class="ctl-sec"><h3>Sawmill cuts</h3>${seg('saw', [['best', 'Best'], ['nopine', 'No pine'], ['wood', 'Pine'], ['oak', 'Oak'], ['redwood', 'Redwood']], dispatch.saw)}` +
+        `<p>Which logs it pulls from the warehouse. Best = redwood, then oak, then pine.</p>` +
+        `<h3>Planks go first to</h3>${seg('planks', [['mixed', 'Mixed'], ['shelf', 'Shelf'], ['workshop', 'Workshop'], ['village', 'Village'], ['export', 'Exports']], dispatch.planks)}` +
+        `<p>Village keeps 30 planks at the sawmill for vans. Exports keeps 40 for trucks, trains and ships. Sawmill has ${saw.out} planks.</p></div>` : '') +
+      (level.charcoal ? `<div class="ctl-sec"><h3>Oak goes first to</h3>${seg('oak', [['shelf', 'Shelf'], ['even', 'Even'], ['kiln', 'Charcoal kiln']], dispatch.oak)}` +
+        `<p>Charcoal kiln holds oak off the shelf and sawmill until the kiln is ⅔ full. Kiln has ${coalKiln.oak} / ${kilnInCap()} oak.</p>` +
+        `<h3>Charcoal goes first to</h3>${seg('coal', [['shack', 'Syrup shack'], ['even', 'Even'], ['export', 'Exports']], dispatch.coal)}` +
+        `<p>Even keeps 20 at the kiln for exports, Exports keeps 45. Kiln has ${coalKiln.out} charcoal.</p></div>` : '');
   }
 
   function afterUpgrade() {
@@ -1429,31 +1459,32 @@
     }
     // it pulls logs from the warehouse when it runs low, best wood first
     timers.sawPull -= dt;
-    if (level.warehouse && sawIn() + pending.saw < 8 && timers.sawPull <= 0) {
-      const kind = ['redwood', 'oak', 'wood'].find(k => spare(k) > 0);
+    if (level.warehouse && sawIn() + pending.saw < Math.min(feedLow(), sawCap()) && timers.sawPull <= 0) {
+      const kind = sawKinds().find(k => spare(k) > 0);
       if (kind) {
-        timers.sawPull = 0.3;
+        timers.sawPull = feedGap();
         wh[kind]--; pending.saw++;
-        fly(kind, whSpot, sawInSpot, 1.2, () => { pending.saw--; saw.q[kind]++; }, 160);
+        fly(kind, whSpot, sawInSpot, level.sawfeed ? 0.8 : 1.2, () => { pending.saw--; saw.q[kind]++; }, 160);
       }
     }
     // cutting: redwood first (4 planks), then oak (2), then pine (1)
-    const next = ['redwood', 'oak', 'wood'].find(k => saw.q[k] > 0);
-    if (next && saw.out < SAW_OUT_CAP) {
+    const next = sawKinds().find(k => saw.q[k] > 0) || ['redwood', 'oak', 'wood'].find(k => saw.q[k] > 0);
+    if (next && saw.out < sawOutCap()) {
       saw.t += dt;
       if (saw.t >= sawTime() / boost() / rSaw()) { saw.t = 0; saw.q[next]--; saw.out += PLANKS_PER[next]; saw.chips = Math.min(CHIP_CAP, saw.chips + PLANKS_PER[next]); }
     } else saw.t = 0;
     timers.saw -= dt;
-    if (saw.out > 0 && timers.saw <= 0) {
+    if (saw.out > plankHold() && timers.saw <= 0) {
       const wsRoom = level.workshop ? WS_CAP - workshop.planks - pending.ws : 0;
       const shelfRoom = stock.plank + pending.shelf.plank < shelfCap();
-      // the workshop gets first pick while it's low; otherwise the shelf, then the workshop
-      if (wsRoom > 0 && (workshop.planks + pending.ws < 12 || !shelfRoom)) {
-        timers.saw = 0.2;
+      // mixed: the workshop gets first pick while it's low; otherwise the shelf, then the workshop
+      const wsFirst = dispatch.planks === 'workshop' ? true : dispatch.planks === 'shelf' ? false : workshop.planks + pending.ws < 12;
+      if (wsRoom > 0 && (wsFirst || !shelfRoom)) {
+        timers.saw = sawOutGap();
         saw.out--; pending.ws++;
         fly('plank', sawOutSpot, wsInSpot, 1.4, () => { pending.ws--; workshop.planks++; }, 240);
       } else if (shelfRoom) {
-        timers.saw = 0.2;
+        timers.saw = sawOutGap();
         saw.out--; pending.shelf.plank++;
         fly('plank', sawOutSpot, () => shelfSpot('plank'), 0.7, () => { pending.shelf.plank--; stock.plank++; }, 80);
       }
@@ -1673,8 +1704,15 @@
       mill.t += dt * pr;
       if (mill.t >= paperTime()) { mill.t = 0; mill.chips -= 2; mill.water -= 1; mill.out++; }
     }
+    // oak feeder: the kiln pulls oak straight from the warehouse
+    timers.kilnPull -= dt;
+    if (level.kilnfeed && level.charcoal && level.warehouse && timers.kilnPull <= 0 && spare('oak') > 0 && coalKiln.oak + kilnPend < kilnInCap()) {
+      timers.kilnPull = kilnGap();
+      wh.oak--; kilnPend++;
+      fly('oak', whSpot, () => bSpot(KILN), 1.6, () => { kilnPend--; coalKiln.oak = Math.min(kilnInCap(), coalKiln.oak + 1); }, 220);
+    }
     // charcoal kiln: 1 oak → 2 charcoal
-    if (level.charcoal && coalKiln.oak > 0 && coalKiln.out < OUT_CAP - 1) {
+    if (level.charcoal && coalKiln.oak > 0 && coalKiln.out < coalOutCap() - 1) {
       coalKiln.t += dt;
       if (coalKiln.t >= coalTime()) { coalKiln.t = 0; coalKiln.oak--; coalKiln.out += 2; }
     }
@@ -1861,8 +1899,8 @@
     { id: 'pulp', kind: 'chips', from: () => level.sawmill && level.papermill, take: () => saw.chips, src: () => ({ x: SAW.x + 64, y: SAW.front + 30 }),
       pick: n => { saw.chips -= n; }, need: () => MILL_CAP - mill.chips, dst: () => ({ x: MILL.x, y: MILL.front + 30 }), drop: n => { mill.chips = Math.min(MILL_CAP, mill.chips + n); } },
     { id: 'oak', kind: 'oak', from: () => level.warehouse && level.charcoal, take: () => spare('oak'), src: () => ({ x: WH_IN.x, y: WH_IN.y + 60 }),
-      pick: n => { wh.oak -= n; }, need: () => KILN_IN_CAP - coalKiln.oak, dst: () => ({ x: KILN.x, y: KILN.front + 30 }), drop: n => { coalKiln.oak = Math.min(KILN_IN_CAP, coalKiln.oak + n); } },
-    { id: 'coal', kind: 'charcoal', from: () => level.charcoal && level.shack, take: () => coalKiln.out, src: () => ({ x: KILN.x, y: KILN.front + 30 }),
+      pick: n => { wh.oak -= n; }, need: () => kilnInCap() - coalKiln.oak, dst: () => ({ x: KILN.x, y: KILN.front + 30 }), drop: n => { coalKiln.oak = Math.min(kilnInCap(), coalKiln.oak + n); } },
+    { id: 'coal', kind: 'charcoal', from: () => level.charcoal && level.shack, take: () => Math.max(0, coalKiln.out - coalHold()), src: () => ({ x: KILN.x, y: KILN.front + 30 }),
       pick: n => { coalKiln.out -= n; }, need: () => SHACK_COAL_CAP - shack.coal, dst: () => ({ x: SHACK.x, y: SHACK.front + 30 }), drop: n => { shack.coal = Math.min(SHACK_COAL_CAP, shack.coal + n); } },
   ];
   const vDst = () => ({ x: VSTORE.x, y: VSTORE.front + 30 });
@@ -1870,10 +1908,10 @@
     need: () => vstoreCap() - vstock[kind], dst: vDst, drop: n => { vstock[kind] = Math.min(vstoreCap(), vstock[kind] + n); } });
   ROUTES.push(
     vRoute('v-wood', 'wood', () => level.warehouse, () => spare('wood'), n => { wh.wood -= n; }, () => ({ x: WH_IN.x, y: WH_IN.y + 60 })),
-    vRoute('v-plank', 'plank', () => level.sawmill, () => saw.out, n => { saw.out -= n; }, () => ({ x: SAW.x + 64, y: SAW.front + 30 })),
+    vRoute('v-plank', 'plank', () => level.sawmill, () => dispatch.planks === 'export' ? Math.max(0, saw.out - 40) : saw.out, n => { saw.out -= n; }, () => ({ x: SAW.x + 64, y: SAW.front + 30 })),
     vRoute('v-syrup', 'syrup', () => level.shack, () => shack.out, n => { shack.out -= n; }, () => ({ x: SHACK.x, y: SHACK.front + 30 })),
     vRoute('v-chair', 'chair', () => level.workshop, () => workshop.chair, n => { workshop.chair -= n; }, () => ({ x: WORKSHOP.x, y: WORKSHOP.front + 30 })),
-    { id: 'b-plank', kind: 'plank', from: () => level.builder && level.sawmill, take: () => saw.out, src: () => ({ x: SAW.x + 64, y: SAW.front + 30 }),
+    { id: 'b-plank', kind: 'plank', from: () => level.builder && level.sawmill, take: () => dispatch.planks === 'export' ? Math.max(0, saw.out - 40) : saw.out, src: () => ({ x: SAW.x + 64, y: SAW.front + 30 }),
       pick: n => { saw.out -= n; }, need: () => BUILDER_CAP.plank - builder.planks, dst: () => ({ x: BUILDER.x, y: BUILDER.front + 20 }),
       drop: n => { builder.planks = Math.min(BUILDER_CAP.plank, builder.planks + n); } },
     { id: 'b-red', kind: 'redwood', from: () => level.builder && level.warehouse, take: () => spare('redwood'), src: () => ({ x: WH_IN.x, y: WH_IN.y + 60 }),
