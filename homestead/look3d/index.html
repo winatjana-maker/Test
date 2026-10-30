@@ -1,0 +1,600 @@
+<title>Homestead 3D Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap">
+<style>
+  /* Full-screen game: a single warm daylight look, same HUD chips as the 2D game. */
+  :root {
+    --ink: #2b2a26;
+    --paper: #fffaf0;
+    --cash: #3c9a4a;
+    --muted: #7a7466;
+    --sky: #bfe0ee;
+    --font-ui: Fredoka, "Trebuchet MS", sans-serif;
+  }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--sky); color: var(--ink); font-family: var(--font-ui); }
+  canvas { position: fixed; inset: 0; display: block; touch-action: none; }
+  .hud { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: calc(env(safe-area-inset-left, 0px) + 12px);
+    display: flex; gap: 8px; pointer-events: none; }
+  .chip { display: flex; align-items: center; gap: 6px; background: var(--paper); border-radius: 14px; padding: 6px 12px;
+    font-weight: 600; font-size: 18px; box-shadow: 0 3px 0 rgba(0,0,0,.18); font-variant-numeric: tabular-nums; }
+  .chip.cash { color: var(--cash); }
+  .chip i { width: 18px; height: 12px; border-radius: 3px; background: var(--cash); display: inline-block; }
+  .chip b { width: 20px; height: 9px; border-radius: 5px; background: #8a5a32; display: inline-block; }
+  .tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); right: calc(env(safe-area-inset-right, 0px) + 12px);
+    background: rgba(43,42,38,.72); color: var(--paper); border-radius: 12px; padding: 6px 10px; font-size: 13px; font-weight: 500;
+    pointer-events: none; }
+  .hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    background: rgba(43,42,38,.72); color: var(--paper); border-radius: 12px; padding: 8px 14px; font-size: 14px;
+    pointer-events: none; transition: opacity .6s; white-space: nowrap; }
+  .joy { position: fixed; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+    background: rgba(255,250,240,.22); border: 2px solid rgba(255,250,240,.7); pointer-events: none; }
+  .knob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
+    background: var(--paper); box-shadow: 0 3px 0 rgba(0,0,0,.2); }
+  @media (prefers-reduced-motion: reduce) { .hint { transition: none; } }
+</style>
+
+<div class="hud"><div class="chip cash"><i></i><span id="n-cash">$0</span></div><div class="chip"><b></b><span id="n-logs">0</span></div></div>
+<div class="tag">3D look test</div>
+<div class="hint" id="hint">Drag bottom-left or use WASD · chop trees, stock the store</div>
+<div class="joy" id="joy" hidden><div class="knob" id="knob"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  // ---------- Renderer, camera, light ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.prepend(renderer.domElement);
+
+  const lin = hex => new THREE.Color(hex).convertSRGBToLinear();
+  const scene = new THREE.Scene();
+  scene.background = lin('#bfe0ee');
+  scene.fog = new THREE.Fog(lin('#bfe0ee'), 38, 80);
+
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.5, 200);
+  const CAM = new THREE.Vector3(0, 21, 17);           // fixed angle, follows the player like the ads
+
+  scene.add(new THREE.HemisphereLight(lin('#dff1ff'), lin('#6b7a3a'), 0.55));
+  const sun = new THREE.DirectionalLight(lin('#fff1d6'), 1.7);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 70 });
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.03;
+  scene.add(sun, sun.target);
+
+  function resize() {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    // phones are tall: pull back so roughly the same width of world stays on screen
+    camera.fov = camera.aspect < 0.8 ? 44 : 32;
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---------- Materials ----------
+  const mats = {};
+  const mat = (hex, opts = {}) => {
+    const k = hex + JSON.stringify(opts);
+    return mats[k] || (mats[k] = new THREE.MeshStandardMaterial({ color: lin(hex), roughness: 0.85, flatShading: true, ...opts }));
+  };
+  function canvasTex(w, h, draw, rx = 1, ry = 1) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry);
+    t.anisotropy = 4;
+    return t;
+  }
+  const planks = (base, line) => canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 16) {
+      g.fillStyle = line; g.fillRect(0, y, w, 2);
+      g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(0, y + 2, w, 3);
+      g.fillStyle = line; g.fillRect((y * 37) % w, y, 2, 16);
+    }
+  });
+  const shingles = canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = '#b5523b'; g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 16) for (let x = (y / 16 % 2) * 16; x < w + 16; x += 32) {
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x - 1, y, 2, 16);
+      g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(x - 16, y + 14, 32, 2);
+      g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(x - 15, y + 1, 30, 3);
+    }
+  }, 0.45, 0.45);
+  const wallMat = new THREE.MeshStandardMaterial({ map: planks('#d9b27c', '#a8794a'), roughness: 0.9 });
+  wallMat.map.repeat.set(3, 1);
+  const roofMat = new THREE.MeshStandardMaterial({ map: shingles, roughness: 0.8 });
+  const bark = mat('#7a4e2c'), cut = mat('#e2b77a');
+
+  // ---------- Ground ----------
+  {
+    const g = new THREE.PlaneGeometry(160, 160, 80, 80); g.rotateX(-Math.PI / 2);
+    const pos = g.attributes.position, col = [];
+    const a = lin('#7fae4c'), b = lin('#6c9c3f'), dirt = lin('#c9a26a'), c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      const n = Math.sin(x * 0.35) * Math.cos(z * 0.29) * 0.5 + Math.sin(x * 0.9 + z * 0.7) * 0.25;
+      c.copy(a).lerp(b, 0.5 + n * 0.5);
+      // dirt yard in front of the store
+      const plaza = Math.max(Math.abs(x) / 11, Math.abs(z + 2) / 7);
+      if (plaza < 1) c.lerp(dirt, Math.min(1, (1 - plaza) * 6));
+      if (Math.hypot(x, z) > 30) pos.setY(i, Math.max(0, Math.sin(x * 0.2) * Math.cos(z * 0.17) * 1.2 + (Math.hypot(x, z) - 30) * 0.08));
+      col.push(c.r, c.g, c.b);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
+    ground.receiveShadow = true;
+    scene.add(ground);
+  }
+  const box = (w, h, d, m, x, y, z, parent = scene) => {
+    const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; parent.add(o); return o;
+  };
+
+  // grass tufts and flowers, instanced so they're cheap on phones
+  {
+    const tuft = new THREE.ConeGeometry(0.09, 0.42, 4); tuft.translate(0, 0.21, 0);
+    const grass = new THREE.InstancedMesh(tuft, mat('#5f9a3a'), 900);
+    const flower = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.09, 0), mat('#fff6e0'), 160);
+    const pink = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.09, 0), mat('#f2a7c3'), 160);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    const spot = () => { let x, z; do { x = (Math.random() - 0.5) * 60; z = (Math.random() - 0.5) * 50 - 2; } while (Math.max(Math.abs(x) / 11.5, Math.abs(z + 2) / 7.5) < 1); return [x, z]; };
+    for (let i = 0; i < 900; i++) {
+      const [x, z] = spot(), k = 0.6 + Math.random() * 0.8;
+      m4.compose(v.set(x, 0, z), q.setFromEuler(e.set((Math.random() - 0.5) * 0.5, Math.random() * 6, (Math.random() - 0.5) * 0.5)), sc.set(k, k, k));
+      grass.setMatrixAt(i, m4);
+    }
+    for (const fl of [flower, pink]) for (let i = 0; i < 160; i++) {
+      const [x, z] = spot(); m4.compose(v.set(x, 0.12, z), q.identity(), sc.set(1, 1, 1)); fl.setMatrixAt(i, m4);
+    }
+    grass.receiveShadow = true; scene.add(grass, flower, pink);
+  }
+
+  // stepping stones from the road to the store
+  for (let i = 0; i < 9; i++) {
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.12, 7), mat('#b9b3a4'));
+    s.position.set(2.6 + Math.sin(i * 1.7) * 0.35, 0.05, 1 + i * 1.6); s.rotation.y = i; s.receiveShadow = true; scene.add(s);
+  }
+
+  // ---------- Store ----------
+  const STORE = { x: 0, z: -8, w: 10, d: 6, h: 3.2 };
+  {
+    const s = new THREE.Group(); s.position.set(STORE.x, 0, STORE.z); scene.add(s);
+    box(STORE.w + 0.6, 0.3, STORE.d + 0.6, mat('#9a948a'), 0, 0.15, 0, s);                 // stone footing
+    box(STORE.w, STORE.h, 0.3, wallMat, 0, 0.3 + STORE.h / 2, -STORE.d / 2, s);           // back wall
+    box(0.3, STORE.h, STORE.d, wallMat, -STORE.w / 2, 0.3 + STORE.h / 2, 0, s);            // sides
+    box(0.3, STORE.h, STORE.d, wallMat, STORE.w / 2, 0.3 + STORE.h / 2, 0, s);
+    box(STORE.w, 0.7, 0.3, wallMat, 0, 0.3 + STORE.h - 0.35, STORE.d / 2, s);              // header over the open front
+    for (const x of [-STORE.w / 2, -1.6, 1.6, STORE.w / 2]) box(0.4, STORE.h, 0.4, mat('#6e4526'), x, 0.3 + STORE.h / 2, STORE.d / 2, s);
+    // pitched roof
+    const tri = new THREE.Shape(); tri.moveTo(-STORE.d / 2 - 0.9, 0); tri.lineTo(0, 2.3); tri.lineTo(STORE.d / 2 + 0.9, 0); tri.lineTo(-STORE.d / 2 - 0.9, 0);
+    const rg = new THREE.ExtrudeGeometry(tri, { depth: STORE.w + 1.2, bevelEnabled: false });
+    rg.translate(0, 0, -(STORE.w + 1.2) / 2); rg.rotateY(Math.PI / 2);
+    const roof = new THREE.Mesh(rg, [wallMat, roofMat]);       // extrude groups: 0 = gable ends, 1 = slopes
+    roof.position.y = 0.3 + STORE.h; roof.castShadow = true; s.add(roof);
+    box(STORE.w + 1.3, 0.25, 0.3, mat('#6e4526'), 0, 0.3 + STORE.h + 2.3, 0, s);           // ridge beam
+    box(0.8, 1.6, 0.8, mat('#9a948a'), 3, 0.3 + STORE.h + 2.0, -1.2, s);                    // stone chimney
+    box(1.0, 0.2, 1.0, mat('#7d776d'), 3, 0.3 + STORE.h + 2.85, -1.2, s);
+    // striped awning over the counter
+    const aw = canvasTex(64, 8, (g, w) => { for (let x = 0; x < w; x += 16) { g.fillStyle = '#e9e1cf'; g.fillRect(x, 0, 8, 8); g.fillStyle = '#3c9a4a'; g.fillRect(x + 8, 0, 8, 8); } }, 6, 1);
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(STORE.w - 0.4, 0.08, 1.6), new THREE.MeshStandardMaterial({ map: aw, roughness: 0.9 }));
+    awning.position.set(0, 0.3 + STORE.h - 0.55, STORE.d / 2 + 0.75); awning.rotation.x = 0.35; awning.castShadow = true; s.add(awning);
+    // counter + interior shelves
+    box(STORE.w - 0.8, 1.0, 0.8, mat('#8a5a32'), 0, 0.8, STORE.d / 2 - 0.6, s);
+    box(STORE.w - 0.6, 0.1, 1.0, mat('#c99a62'), 0, 1.35, STORE.d / 2 - 0.6, s);
+    for (const y of [0.9, 1.9]) box(STORE.w - 1.2, 0.12, 1.1, mat('#a06b3b'), 0, y, -STORE.d / 2 + 0.8, s);
+    // sign board
+    const sign = canvasTex(256, 64, (g, w, h) => {
+      g.fillStyle = '#3a2a1c'; g.fillRect(0, 0, w, h); g.fillStyle = '#fffaf0';
+      g.font = '600 40px Fredoka, Trebuchet MS, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('LUMBER & CO', w / 2, h / 2 + 2);
+    });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.05, 0.12), [mat('#3a2a1c'), mat('#3a2a1c'), mat('#3a2a1c'), mat('#3a2a1c'), new THREE.MeshStandardMaterial({ map: sign }), mat('#3a2a1c')]);
+    board.position.set(0, 0.3 + STORE.h + 0.1, STORE.d / 2 + 0.25); board.castShadow = true; s.add(board);
+    // lanterns
+    for (const x of [-4.6, 4.6]) {
+      box(0.12, 2.4, 0.12, mat('#3a2a1c'), x, 1.2, STORE.d / 2 + 1.6, s);
+      const l = box(0.4, 0.45, 0.4, mat('#ffd58a', { emissive: lin('#ffb347'), emissiveIntensity: 0.6 }), x, 2.55, STORE.d / 2 + 1.6, s);
+      l.castShadow = false;
+    }
+  }
+
+  // ---------- Logs ----------
+  const logGeo = new THREE.CylinderGeometry(0.17, 0.17, 1.0, 8); logGeo.rotateZ(Math.PI / 2);
+  const makeLog = () => { const m = new THREE.Mesh(logGeo, [bark, cut, cut]); m.castShadow = true; return m; };
+
+  // log pile on a display pallet in front of the counter: customers buy from here
+  const RACK = new THREE.Vector3(-0.4, 0, -4.1);
+  box(2.9, 0.22, 1.3, mat('#b98a55'), RACK.x, 0.11, RACK.z);
+  for (const x of [-1.25, 1.25]) box(0.14, 1.1, 0.14, mat('#6e4526'), RACK.x + x, 0.55, RACK.z + 0.55);
+  const shelfLogs = [];
+  for (let layer = 0, n = 7; n > 0; layer++, n--)
+    for (let i = 0; i < n; i++) {
+      const m = makeLog(); m.rotation.y = Math.PI / 2; m.scale.set(1.1, 1, 1);
+      m.position.set(RACK.x + (i - (n - 1) / 2) * 0.36, 0.39 + layer * 0.31, RACK.z);
+      m.visible = false; scene.add(m); shelfLogs.push(m);
+    }
+  const SHELF_MAX = shelfLogs.length;
+
+  // drop zone tile in front of the store
+  const DROP = new THREE.Vector3(-3, 0, -3.2);
+  {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 1.8), mat('#e9e1cf'));
+    t.position.set(DROP.x, 0.04, DROP.z); t.receiveShadow = true; scene.add(t);
+    const icon = makeLog(); icon.scale.setScalar(0.9); icon.position.set(DROP.x, 0.22, DROP.z); scene.add(icon);
+  }
+
+  // ---------- Cash pile ----------
+  const PILE = new THREE.Vector3(6.2, 0, -3.0);
+  const billGeo = new THREE.BoxGeometry(0.62, 0.11, 0.36);
+  const billMat = mat('#56b45f'), bandMat = mat('#e9e1cf');
+  const makeBill = () => {
+    const g = new THREE.Group();
+    const b = new THREE.Mesh(billGeo, billMat); b.castShadow = true; g.add(b);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.115, 0.37), bandMat); g.add(band);
+    return g;
+  };
+  const pileBills = [];
+  for (let i = 0; i < 40; i++) {
+    const m = makeBill(), layer = Math.floor(i / 4), k = i % 4;
+    m.position.set(PILE.x + (k % 2) * 0.66 - 0.33, 0.06 + layer * 0.12, PILE.z + Math.floor(k / 2) * 0.4 - 0.2);
+    m.rotation.y = (i * 0.37) % 0.2 - 0.1; m.visible = false; scene.add(m); pileBills.push(m);
+  }
+
+  // ---------- People ----------
+  function makePerson(o) {
+    const g = new THREE.Group();
+    const skin = mat(o.skin), shirt = mat(o.shirt), pants = mat(o.pants), dark = mat('#1d1a17');
+    const limb = (w, h, d, m, x, y) => {           // pivot at the top so it swings from the hip/shoulder
+      const p = new THREE.Group(); p.position.set(x, y, 0);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.y = -h / 2; mesh.castShadow = true;
+      p.add(mesh); g.add(p); return p;
+    };
+    const legL = limb(0.24, 0.62, 0.28, pants, -0.17, 0.66), legR = limb(0.24, 0.62, 0.28, pants, 0.17, 0.66);
+    for (const leg of [legL, legR]) { const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.36), dark); shoe.position.set(0, -0.6, 0.05); leg.add(shoe); }
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.74, 0.44), shirt); body.position.y = 1.03; body.castShadow = true; g.add(body);
+    const armL = limb(0.2, 0.64, 0.24, shirt, -0.47, 1.36), armR = limb(0.2, 0.64, 0.24, shirt, 0.47, 1.36);
+    for (const arm of [armL, armR]) { const hand = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.2), skin); hand.position.y = -0.7; arm.add(hand); }
+    const head = new THREE.Group(); head.position.y = 1.72; g.add(head);
+    const skull = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), skin); skull.castShadow = true; head.add(skull);
+    const ear = new THREE.SphereGeometry(0.07, 6, 4);
+    for (const x of [-0.34, 0.34]) { const e = new THREE.Mesh(ear, skin); e.position.set(x, 0, 0); head.add(e); }
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.355, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.36), mat(o.hair));
+    hair.position.y = 0.03; head.add(hair);
+    if (o.beard) {
+      const beard = new THREE.Mesh(new THREE.SphereGeometry(0.352, 14, 8, Math.PI / 2 - 1.25, 2.5, Math.PI * 0.52, Math.PI * 0.36), mat(o.hair));
+      head.add(beard);
+    }
+    for (const x of [-0.12, 0.12]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.04), dark); e.position.set(x, 0.05, 0.32); head.add(e); }
+    g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+    scene.add(g);
+    return { g, legL, legR, armL, armR, head, walk: 0, face: 0 };
+  }
+  function animatePerson(p, speed, dt) {
+    if (speed > 0.05) p.walk += dt * 10 * Math.min(1.3, speed / 4);
+    else p.walk *= 0.85;
+    const s = Math.sin(p.walk) * Math.min(1, speed / 3) * 0.7;
+    p.legL.rotation.x = s; p.legR.rotation.x = -s;
+    p.armL.rotation.x = -s * 0.8; if (!p.chopping) p.armR.rotation.x = s * 0.8;
+    p.g.position.y = Math.abs(Math.sin(p.walk)) * 0.06 * Math.min(1, speed / 3);
+  }
+  const turnTo = (p, vx, vz, dt) => {
+    const want = Math.atan2(vx, vz);
+    let d = want - p.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
+    p.g.rotation.y += d * Math.min(1, dt * 12);
+  };
+
+  const player = makePerson({ skin: '#5b3a24', shirt: '#e0603f', pants: '#34405a', hair: '#141110', beard: true });
+  player.g.position.set(-2, 0, 2); player.g.scale.setScalar(1.2);
+  // axe in the right hand
+  const axe = new THREE.Group();
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), mat('#8a5a32')); handle.position.y = -0.1; axe.add(handle);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.26, 0.3), mat('#c9ced6', { metalness: 0.6, roughness: 0.4 })); blade.position.set(0, 0.22, 0.14); axe.add(blade);
+  axe.position.set(0, -0.72, 0.1); axe.rotation.x = Math.PI / 2; axe.visible = false; player.armR.add(axe);
+  // logs carried on the back
+  const CARRY = 20;
+  const backLogs = [];
+  for (let i = 0; i < CARRY; i++) {
+    const m = makeLog(); m.scale.set(0.8, 1, 1);
+    m.position.set(0, 0.85 + i * 0.3, -0.5); m.visible = false; player.g.add(m); backLogs.push(m);
+  }
+
+  // ---------- Trees ----------
+  const trees = [];
+  function makeTree(kind, x, z) {
+    const g = new THREE.Group(); g.position.set(x, 0, z);
+    const inner = new THREE.Group(); g.add(inner);
+    const s = 0.85 + Math.random() * 0.35;
+    if (kind === 'pine') {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 1.2, 6), bark); trunk.position.y = 0.6; inner.add(trunk);
+      [[1.5, 1.7, 1.6], [1.2, 1.5, 2.5], [0.85, 1.3, 3.3]].forEach(([r, h, y], i) => {
+        const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), mat(i % 2 ? '#2f7a45' : '#2a6e3f')); c.position.y = y; c.rotation.y = i; inner.add(c);
+      });
+    } else {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.6, 6), bark); trunk.position.y = 0.8; inner.add(trunk);
+      [[0, 2.5, 0, 1.25], [0.7, 2.1, 0.3, 0.9], [-0.65, 2.2, -0.2, 0.95], [0.1, 3.1, -0.2, 0.85]].forEach(([dx, y, dz, r], i) => {
+        const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), mat(i % 2 ? '#5f9a3a' : '#6aa843')); c.position.set(dx, y, dz); c.rotation.set(i, i * 2, 0); inner.add(c);
+      });
+    }
+    inner.scale.setScalar(s);
+    g.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.3, 0.3, 7), [bark, cut, cut]); stump.position.y = 0.15; stump.castShadow = true; stump.visible = false; g.add(stump);
+    scene.add(g);
+    const hp = kind === 'pine' ? 3 : 5;
+    trees.push({ g, inner, stump, kind, s, hp, max: hp, state: 'up', t: 0, wob: 0, axis: new THREE.Vector3(1, 0, 0) });
+  }
+  // tree yard west of the store, in tidy rows like a farm
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++)
+    makeTree(r % 2 ? 'oak' : 'pine', -16 + c * 3.4 + (r % 2) * 1.5, -6.5 + r * 3.6);
+  // wild forest edge (decor only, never chopped)
+  for (let i = 0; i < 70; i++) {
+    const a = i / 70 * Math.PI * 2, d = 26 + Math.random() * 14;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d * 0.9 - 4;
+    makeTree(Math.random() < 0.6 ? 'pine' : 'oak', x, z);
+    trees[trees.length - 1].wild = true;
+  }
+  // fence around the yard
+  for (let i = 0; i <= 12; i++) {
+    for (const z of [-8.5, 7.2]) box(0.16, 0.9, 0.16, mat('#8a5a32'), -17.5 + i * 1.15, 0.45, z);
+  }
+  box(13.8, 0.1, 0.08, mat('#a06b3b'), -10.6, 0.75, -8.5); box(13.8, 0.1, 0.08, mat('#a06b3b'), -10.6, 0.75, 7.2);
+  // rocks and bushes
+  for (let i = 0; i < 18; i++) {
+    const a = i * 2.4, d = 14 + (i * 7) % 12;
+    const x = Math.cos(a) * d + 4, z = Math.sin(a) * d * 0.7 + 2;
+    if (Math.abs(x) < 12 && z > -12 && z < 8) continue;
+    const r = new THREE.Mesh(i % 2 ? new THREE.DodecahedronGeometry(0.5 + (i % 3) * 0.2, 0) : new THREE.IcosahedronGeometry(0.6, 0), mat(i % 2 ? '#a7a294' : '#4f8a35'));
+    r.position.set(x, 0.3, z); r.rotation.set(i, i * 1.3, 0); r.castShadow = r.receiveShadow = true; scene.add(r);
+  }
+
+  // ---------- Customers ----------
+  const SHIRTS = ['#4a7fc1', '#e8b43c', '#8c5bb5', '#3c9a8a', '#d0576b', '#6b8e3a'];
+  const SKINS = ['#5b3a24', '#8d5a3b', '#c68e62', '#f0c8a0', '#3f281a'];
+  const HAIRS = ['#141110', '#3a2516', '#7a4a22', '#c9a15a'];
+  const QUEUE = [0, 1, 2, 3].map(i => new THREE.Vector3(1.9, 0, -3.5 + i * 1.6));
+  const SPAWN = new THREE.Vector3(3, 0, 18), LEAVE = new THREE.Vector3(14, 0, 16);
+  const customers = [];
+  function spawnCustomer() {
+    const n = customers.length + Math.random() * 9 | 0;
+    const p = makePerson({ skin: SKINS[n % SKINS.length], shirt: SHIRTS[n % SHIRTS.length], pants: '#3d3a46', hair: HAIRS[n % HAIRS.length], beard: n % 3 === 0 });
+    p.g.position.copy(SPAWN);
+    p.g.scale.setScalar(1.1);
+    Object.assign(p, { state: 'queue', want: 2 + (Math.random() * 3 | 0), got: 0, t: 0, carry: [] });
+    customers.push(p);
+  }
+  for (let i = 0; i < 4; i++) { spawnCustomer(); customers[i].g.position.set(2.6, 0, 1 + i * 2.2); }
+
+  // ---------- Flying items ----------
+  const flyers = [];
+  function fly(mesh, from, to, dur, onDone, arc = 1.6) {
+    mesh.position.copy(from); scene.add(mesh);
+    flyers.push({ mesh, from: from.clone(), to, dur, t: 0, onDone, arc });
+  }
+  const tmp = new THREE.Vector3();
+
+  // ---------- State + HUD ----------
+  let cash = 0, carried = 0, stock = 0, pile = 0;
+  const ui = { cash: document.getElementById('n-cash'), logs: document.getElementById('n-logs') };
+  const hud = () => { ui.cash.textContent = '$' + cash; ui.logs.textContent = carried; };
+  const showBack = () => backLogs.forEach((m, i) => m.visible = i < carried);
+  const showShelf = () => shelfLogs.forEach((m, i) => m.visible = i < stock);
+  const showPile = () => pileBills.forEach((m, i) => m.visible = i < pile);
+
+  // ---------- Input ----------
+  const keys = new Set();
+  const KEY = { KeyW: 'u', ArrowUp: 'u', KeyS: 'd', ArrowDown: 'd', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
+  addEventListener('keydown', e => { if (KEY[e.code]) { keys.add(KEY[e.code]); hideHint(); e.preventDefault(); } });
+  addEventListener('keyup', e => keys.delete(KEY[e.code]));
+  const joy = document.getElementById('joy'), knob = document.getElementById('knob');
+  const stick = { id: null, ox: 0, oy: 0, dx: 0, dy: 0, R: 56 };
+  const cv = renderer.domElement;
+  function aim(e) {
+    let dx = e.clientX - stick.ox, dy = e.clientY - stick.oy; const d = Math.hypot(dx, dy);
+    if (d > stick.R) { dx = dx / d * stick.R; dy = dy / d * stick.R; }
+    stick.dx = dx; stick.dy = dy; knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  }
+  cv.addEventListener('pointerdown', e => {
+    if (stick.id !== null || e.clientX > innerWidth / 2 || e.clientY < innerHeight * 0.45) return;
+    stick.id = e.pointerId; cv.setPointerCapture(e.pointerId);
+    stick.ox = 16 + stick.R + 20; stick.oy = innerHeight - 110;
+    joy.style.left = stick.ox + 'px'; joy.style.top = stick.oy + 'px'; joy.hidden = false;
+    aim(e); hideHint();
+  });
+  cv.addEventListener('pointermove', e => { if (e.pointerId === stick.id) aim(e); });
+  const end = e => { if (e.pointerId === stick.id) { stick.id = null; stick.dx = stick.dy = 0; joy.hidden = true; } };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  const hint = document.getElementById('hint');
+  let hintGone = false;
+  function hideHint() { if (!hintGone) { hintGone = true; setTimeout(() => hint.style.opacity = 0, 3000); } }
+  function input() {
+    let x = 0, z = 0;
+    if (keys.has('l')) x--; if (keys.has('r')) x++; if (keys.has('u')) z--; if (keys.has('d')) z++;
+    if (x || z) { const m = Math.hypot(x, z); return [x / m, z / m]; }
+    const m = Math.hypot(stick.dx, stick.dy);
+    if (stick.id !== null && m > 8) { const t = Math.min(1, (m - 8) / (stick.R - 8)); return [stick.dx / m * t, stick.dy / m * t]; }
+    return [0, 0];
+  }
+
+  // ---------- Update ----------
+  const SPEED = 6.2;
+  const vel = new THREE.Vector3();
+  const timers = { chop: 0, drop: 0, sell: 0, collect: 0 };
+  const solid = (x, z) => (Math.abs(x - STORE.x) < STORE.w / 2 + 0.6 && z > STORE.z - STORE.d / 2 - 0.6 && z < STORE.z + STORE.d / 2 + 0.3)
+    || (Math.abs(x - RACK.x) < 1.8 && Math.abs(z - RACK.z) < 1.0);
+
+  function updatePlayer(dt) {
+    const [ix, iz] = input();
+    vel.x += (ix * SPEED - vel.x) * Math.min(1, dt * 14);
+    vel.z += (iz * SPEED - vel.z) * Math.min(1, dt * 14);
+    const p = player.g.position;
+    const nx = p.x + vel.x * dt, nz = p.z + vel.z * dt;
+    if (!solid(nx, p.z)) p.x = nx; else vel.x = 0;
+    if (!solid(p.x, nz)) p.z = nz; else vel.z = 0;
+    p.x = Math.max(-24, Math.min(24, p.x)); p.z = Math.max(-20, Math.min(20, p.z));
+    const sp = Math.hypot(vel.x, vel.z);
+    if (sp > 0.3) turnTo(player, vel.x, vel.z, dt);
+    animatePerson(player, sp, dt);
+
+    // chop the nearest standing tree in reach
+    let near = null, nd = 2.2;
+    if (carried < CARRY) for (const t of trees) {
+      if (t.wild || t.state !== 'up') continue;
+      const d = Math.hypot(t.g.position.x - p.x, t.g.position.z - p.z);
+      if (d < nd) { nd = d; near = t; }
+    }
+    player.chopping = !!near; axe.visible = !!near;
+    timers.chop -= dt;
+    if (near) {
+      if (sp < 0.3) turnTo(player, near.g.position.x - p.x, near.g.position.z - p.z, dt);
+      const swing = Math.max(0, timers.chop) / 0.32;
+      player.armR.rotation.x = -2.4 + (1 - swing) * 2.2;
+      if (timers.chop <= 0) {
+        timers.chop = 0.32;
+        near.hp--; near.wob = 1;
+        if (near.hp <= 0) {
+          near.state = 'falling'; near.t = 0;
+          const dx = near.g.position.x - p.x, dz = near.g.position.z - p.z, m = Math.hypot(dx, dz) || 1;
+          near.axis.set(dz / m, 0, -dx / m);
+          const n = near.kind === 'pine' ? 3 : 4;
+          for (let i = 0; i < n; i++) {
+            const from = near.g.position.clone().add(new THREE.Vector3(0, 1 + i * 0.3, 0));
+            setTimeout(() => {
+              const slot = carried + flyers.filter(f => f.toBack).length;
+              if (slot >= CARRY) return;
+              const target = () => player.g.localToWorld(tmp.set(0, 0.85 + slot * 0.3, -0.5)).clone();
+              fly(makeLog(), from, target, 0.45, () => { carried++; showBack(); hud(); });
+              flyers[flyers.length - 1].toBack = true;
+            }, 350 + i * 90);
+          }
+        }
+      }
+    } else player.armR.rotation.x *= 0.8;
+
+    // stock the store from the drop tile
+    timers.drop -= dt;
+    if (carried > 0 && Math.hypot(p.x - DROP.x, p.z - DROP.z) < 1.6 && timers.drop <= 0 && stock + flyers.filter(f => f.toShelf).length < SHELF_MAX) {
+      timers.drop = 0.07;
+      const slot = stock + flyers.filter(f => f.toShelf).length;
+      const from = player.g.localToWorld(new THREE.Vector3(0, 0.85 + (carried - 1) * 0.3, -0.5));
+      carried--; showBack(); hud();
+      fly(makeLog(), from, shelfLogs[slot].position.clone(), 0.5, () => { stock++; showShelf(); }, 2.4);
+      flyers[flyers.length - 1].toShelf = true;
+    }
+    // pick up cash
+    timers.collect -= dt;
+    if (pile > 0 && Math.hypot(p.x - PILE.x, p.z - PILE.z) < 1.8 && timers.collect <= 0) {
+      timers.collect = 0.05;
+      const from = pileBills[pile - 1].position.clone();
+      pile--; showPile();
+      fly(makeBill(), from, () => player.g.position.clone().add(new THREE.Vector3(0, 1.4, 0)), 0.3, () => { cash += 5; hud(); }, 1.2);
+    }
+  }
+
+  function updateTrees(dt) {
+    for (const t of trees) {
+      if (t.wob > 0) { t.wob = Math.max(0, t.wob - dt * 4); t.inner.rotation.z = Math.sin(t.wob * 25) * t.wob * 0.08; }
+      if (t.state === 'falling') {
+        t.t += dt;
+        const k = Math.min(1, t.t / 0.7), ease = k * k;
+        t.inner.quaternion.setFromAxisAngle(t.axis, ease * Math.PI / 2);
+        if (k >= 1) { t.inner.visible = false; t.stump.visible = true; t.state = 'stump'; t.t = 0; }
+      } else if (t.state === 'stump') {
+        t.t += dt;
+        if (t.t > 7) { t.state = 'growing'; t.t = 0; t.inner.quaternion.identity(); t.inner.visible = true; t.inner.scale.setScalar(0.01); }
+      } else if (t.state === 'growing') {
+        t.t += dt;
+        const k = Math.min(1, t.t / 1.2), bounce = 1 + Math.sin(k * Math.PI) * 0.12;
+        t.inner.scale.setScalar(t.s * k * bounce);
+        if (k >= 1) { t.state = 'up'; t.hp = t.max; t.stump.visible = false; t.inner.scale.setScalar(t.s); }
+      }
+    }
+  }
+
+  function walkTo(c, target, dt, speed = 3.2) {
+    const p = c.g.position, dx = target.x - p.x, dz = target.z - p.z, d = Math.hypot(dx, dz);
+    if (d < 0.08) { animatePerson(c, 0, dt); return true; }
+    const s = Math.min(d, speed * dt);
+    p.x += dx / d * s; p.z += dz / d * s; turnTo(c, dx, dz, dt); animatePerson(c, speed, dt);
+    return false;
+  }
+
+  function updateCustomers(dt) {
+    timers.sell -= dt;
+    const queue = customers.filter(c => c.state === 'queue');
+    queue.forEach((c, i) => {
+      const at = walkTo(c, QUEUE[Math.min(i, QUEUE.length - 1)].clone().add(new THREE.Vector3(0, 0, i >= QUEUE.length ? (i - QUEUE.length + 1) * 1.5 : 0)), dt);
+      if (i === 0 && at) {
+        turnTo(c, 0, -1, dt);
+        if (stock > 0 && timers.sell <= 0) {
+          timers.sell = 0.45;
+          stock--; showShelf();
+          const from = shelfLogs[stock].position.clone();
+          const slot = c.got;
+          fly(makeLog(), from, () => c.g.localToWorld(new THREE.Vector3(0, 1.1, 0.45 + slot * 0)).clone().add(new THREE.Vector3(0, slot * 0.3, 0)), 0.45, () => {
+            const m = makeLog(); m.scale.setScalar(0.8); m.position.set(0, 1.0 + c.carry.length * 0.28, 0.45); c.g.add(m); c.carry.push(m);
+          });
+          c.got++;
+          if (c.got >= c.want) {
+            c.state = 'pay'; c.t = 0;
+          }
+        }
+      }
+    });
+    for (const c of customers) {
+      if (c.state === 'pay') {
+        c.t += dt;
+        if (c.t > 0.5) {
+          c.state = 'leave';
+          const bills = c.want * 2;
+          for (let i = 0; i < bills; i++) setTimeout(() => {
+            const slot = pile + flyers.filter(f => f.toPile).length;
+            if (slot >= pileBills.length) { cash += 5; hud(); return; }
+            fly(makeBill(), c.g.position.clone().add(new THREE.Vector3(0, 1.3, 0)), pileBills[slot].position.clone(), 0.5, () => { pile++; showPile(); });
+            flyers[flyers.length - 1].toPile = true;
+          }, i * 60);
+        }
+      } else if (c.state === 'leave') {
+        if (walkTo(c, LEAVE, dt)) {
+          scene.remove(c.g); customers.splice(customers.indexOf(c), 1); spawnCustomer();
+        }
+      }
+    }
+  }
+
+  function updateFlyers(dt) {
+    for (let i = flyers.length - 1; i >= 0; i--) {
+      const f = flyers[i]; f.t += dt;
+      const k = Math.min(1, f.t / f.dur), e = 1 - (1 - k) * (1 - k);
+      const to = typeof f.to === 'function' ? f.to() : f.to;
+      f.mesh.position.lerpVectors(f.from, to, e);
+      f.mesh.position.y += Math.sin(k * Math.PI) * f.arc;
+      f.mesh.rotation.y += dt * 8;
+      if (k >= 1) { scene.remove(f.mesh); flyers.splice(i, 1); f.onDone && f.onDone(); }
+    }
+  }
+
+  // ---------- Loop ----------
+  const camPos = new THREE.Vector3(), look = new THREE.Vector3();
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    updatePlayer(dt); updateTrees(dt); updateCustomers(dt); updateFlyers(dt);
+    const p = player.g.position;
+    look.lerp(tmp.set(p.x, 0.8, p.z), Math.min(1, dt * 6));
+    camPos.copy(look).add(CAM);
+    camera.position.copy(camPos); camera.lookAt(look);
+    sun.position.set(look.x - 14, 24, look.z + 10); sun.target.position.copy(look);
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  look.set(player.g.position.x, 0.8, player.g.position.z);
+  stock = 10; showShelf(); hud();
+  requestAnimationFrame(frame);
+})();
+</script>
