@@ -1135,7 +1135,6 @@
     const RB = ROOFED.find(r => r.ids.includes(u.id));
     if (RB) bumps[RB.key] = performance.now();
     if (u.group === 'store') bumps.store = performance.now();
-    shake(cost >= 5000 ? 7 : 3, cost >= 5000 ? 0.5 : 0.25);
     afterUpgrade();
     save(true);
     renderPanel();
@@ -1509,7 +1508,6 @@
       research = null;
       toast(`Research done: ${u.name} Lv ${level[u.id]}`);
       bumps.lab = performance.now();
-      shake(4, 0.3);
       save(true);
     }
   }
@@ -1537,7 +1535,7 @@
       }
     } else if (ship.state === 'arrive') {
       ship.x = Math.max(park, ship.x - 300 * dt);
-      if (ship.x <= park) { ship.state = 'load'; ship.t = 0; shake(3, 0.3); }
+      if (ship.x <= park) { ship.state = 'load'; ship.t = 0; }
     } else if (ship.state === 'load') {
       ship.t += dt; ship.idle += dt;
       if (ship.t >= craneStep()) {
@@ -1587,7 +1585,6 @@
         bumps['house' + houses.indexOf(h)] = performance.now();
         popText(spot.x, spot.front, 110, 'New house!', '#fff3a6');
         toast('A new family moved into Pine Village');
-        shake(3, 0.3);
       }
     }
     const crews = 1 + (level.crew >= 2 ? 1 : 0);
@@ -1909,7 +1906,6 @@
     updateGoals(dt);
     updatePanel(dt);
 
-    shakeT = Math.max(0, shakeT - dt); if (!shakeT) shakeAmp = 0;
     if (sp > 160) {
       timers.dust = (timers.dust || 0) - dt;
       if (timers.dust <= 0) {
@@ -1927,7 +1923,6 @@
           fx.push({ type: 'chip', kind: 'dust', x: f.x + f.dir * Math.random() * len, y: f.y + (Math.random() - 0.5) * 20, h: 2,
                     vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 30, vh: 30 + Math.random() * 40, t: 0, life: 0.8 });
         }
-        if (Math.hypot(f.x - player.x, f.y - player.y) < 700) shake(f.species === 'redwood' ? 6 : 2.5, 0.25);
       }
       if (f.type === 'chip') {
         f.x += f.vx * dt; f.y += f.vy * dt;
@@ -3551,12 +3546,9 @@
     fn();
     ctx.restore();
   }
-  let shakeT = 0, shakeAmp = 0;
-  function shake(amp, dur = 0.35) { shakeAmp = Math.max(shakeAmp, amp); shakeT = Math.max(shakeT, dur); }
 
   function render(time) {
     ctx.save();
-    if (shakeT > 0) ctx.translate((Math.random() - 0.5) * shakeAmp * 2, (Math.random() - 0.5) * shakeAmp * 2);
     drawGround();
     drawGroundMarks(time);
     const items = [];

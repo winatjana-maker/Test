@@ -30,7 +30,7 @@ Read this first when picking the project back up.
   - The roof fades when the player is inside or behind (`updateRoofs`).
   - Walls are collision boxes with a door gap (`wallBoxes`).
   - Tags drawn inside an interior are deferred with `tagSink` so they render above the roof.
-- **Juice:** `bounceWrap` (building bounce on upgrade), `shake()`, falling-tree fx (`drawFall`), dust chips, walk cycle with arms in `drawPerson`.
+- **Juice:** `bounceWrap` (building bounce on upgrade), falling-tree fx (`drawFall`), dust chips, walk cycle with arms in `drawPerson`.
 - **Districts (bought deeds):**
   - Redwood Reserve (north)
   - Furniture District (east): workshop + showroom with buyer cars
