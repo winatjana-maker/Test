@@ -23,6 +23,17 @@
     font-family: var(--font-ui);
   }
   canvas { display: block; width: 100%; height: 100%; }
+  #game3d { position: fixed; inset: 0; }
+  #game { position: relative; }
+  .view-toggle {
+    position: fixed; z-index: 2;
+    right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    font: 600 14px var(--font-ui); color: var(--ink); background: var(--paper);
+    border: 0; border-radius: 12px; padding: 8px 12px; cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0,0,0,.18);
+  }
+  .view-toggle:active { transform: translateY(2px); box-shadow: none; }
+  .view-toggle:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   .hud {
     position: fixed;
     top: calc(12px + env(safe-area-inset-top, 0px));
@@ -187,7 +198,9 @@
   }
 </style>
 
+<canvas id="game3d" hidden></canvas>
 <canvas id="game"></canvas>
+<button class="view-toggle" id="view-toggle" type="button">3D view</button>
 <div class="hud" aria-label="Cash and what you're carrying">
   <div class="chip cash" id="chip-cash" title="Cash">
     <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="1.5" y="5" width="17" height="10" rx="2" fill="#3f9d4f"/><circle cx="10" cy="10" r="2.6" fill="#a8dcae"/></svg>
@@ -215,4 +228,4 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 <div class="hint" id="hint">Touch the bottom left to move · Chop trees · Restock · Grab the cash</div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

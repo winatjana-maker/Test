@@ -534,9 +534,10 @@
     ctx.setTransform(DPR * ZOOM, 0, 0, DPR * ZOOM, 0, 0);
     placeStick();
     snapCamera();
+    if (R3) R3.resize();
   }
 
-  const toScreen = (x, y) => [x - cam.x, y * TILT - cam.y];
+  const toScreen = (x, y) => view3d() ? R3.project(x, y) : [x - cam.x, y * TILT - cam.y];
 
   function camTarget() {
     const pad = 40;
@@ -3689,7 +3690,8 @@
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    update(dt); render(now / 1000);
+    update(dt);
+    if (view3d()) R3.render(now / 1000); else render(now / 1000);
     if ((timers.map = (timers.map || 0) - dt) <= 0) { timers.map = 0.3; drawMap(); }
     requestAnimationFrame(frame);
   }

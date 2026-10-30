@@ -8,8 +8,8 @@ Read this first when picking the project back up.
   Republish to the same URL by passing it as `url` to the Artifact tool.
   The artifact has `db` + `user` capabilities (account save); omit `capabilities` on republish to keep them.
 - **3D look test (separate page):** https://claude.ai/artifact/NWrMz17zAH9uepr6a65e9h, source `look3d/index.html` (Three.js r128 from cdnjs). The player asked for a Whiteout-style real-3D look; this is the trial before converting the game. Screen shake was removed at the player's request; building bounce and tree wobble stay.
-- **Source:** `homestead/src/head.html` (title, CSS, HUD markup) and `homestead/src/game.js` (all code, inside `<script>`).
-- **Build:** `cat src/head.html src/game.js > index.html` (run inside `homestead/`).
+- **Source:** `homestead/src/head.html` (title, CSS, HUD markup, Three.js tag), `homestead/src/game.js` (all game code, inside `<script>`) and `homestead/src/render3d.js` (3D view, inserted inside the game's scope before the Loop section).
+- **Build:** `python3 build.py` (run inside `homestead/`).
 - **Branch:** `claude/homestead-game`. Commit and push after each step.
 
 ## About the player
@@ -19,6 +19,13 @@ Read this first when picking the project back up.
 - Character: a Black man with a beard; keep that look.
 - Likes Whiteout Survival–style ads: stacking items, auto-gather, visible logistics.
 - Wants a large, interconnected business with lots of upgrades. Stone and "worlds" were dropped for now.
+
+## 3D view (in progress, staged)
+
+- The player chose a Whiteout-style real-3D look and a staged conversion. A **3D view / 2D view** button (bottom right) switches; the choice is remembered in localStorage. Same page, same save.
+- `R3` (render3d.js) reads the same game state each frame. The 2D canvas stays on top as a clear overlay for labels, pop-up text, the guide arrow and the joystick; `toScreen` projects through the 3D camera when 3D is on, and flying items are unprojected back into 3D.
+- Round 1 (done): ground/plaza/roads/sea/districts, store with shelves, upgrade tiles, zones, trees/maples (culled by distance, see-through when in front of the player), falling trees, people (player, customers, porter, tapper, villagers), bots/forklift/sapbot/vans/drone, warehouse + annex racks, pallets, conveyor, cash piles, flying items.
+- Later rounds: real interiors and machines for sawmill, shack, workshop, industry, rail, harbor and village (they are simple stand-ins now), phone performance pass, then make 3D the default.
 
 ## Game overview (current)
 
