@@ -7,6 +7,7 @@ Read this first when picking the project back up.
 - **Playable game (published):** https://claude.ai/artifact/J1PmAqgWDPj7iC8bvr1dtQ
   Republish to the same URL by passing it as `url` to the Artifact tool.
   The artifact has `db` + `user` capabilities (account save); omit `capabilities` on republish to keep them.
+- **3D look test (separate page):** https://claude.ai/artifact/NWrMz17zAH9uepr6a65e9h, source `look3d/index.html` (Three.js r128 from cdnjs). The player asked for a Whiteout-style real-3D look; this is the trial before converting the game. Screen shake was removed at the player's request; building bounce and tree wobble stay.
 - **Source:** `homestead/src/head.html` (title, CSS, HUD markup) and `homestead/src/game.js` (all code, inside `<script>`).
 - **Build:** `cat src/head.html src/game.js > index.html` (run inside `homestead/`).
 - **Branch:** `claude/homestead-game`. Commit and push after each step.
