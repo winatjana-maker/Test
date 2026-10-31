@@ -213,6 +213,7 @@
     { id: 'dispatch', name: 'Dispatch Office', ...P(-600, 480) },
     { id: 'harbor', name: 'Harbor', ...P(1060, -1230) },
     { id: 'village', name: 'Pine Village', ...P(-1000, -650) },
+    { id: 'move', name: 'Sell & Move', ...P(-70, 520) },
   ];
   const TILE_SIZE = 110;
   const level = {}, paid = {};
@@ -228,7 +229,35 @@
   const whCap = () => [0, 200, 500, 1200, 3000, 5000][level.warehouse] + [0, 1500, 3000, 6000][level.annex];
   const mainCap = () => [0, 200, 500, 1200, 3000, 5000][level.warehouse];
   const palletCap = () => [40, 120, 300, 600][level.palletyard];
-  const incomeMul = () => [1, 1.1, 1.25, 1.5][level.hq];
+  // ---------- Maps (sell the business, move on) ----------
+  // Each move gives a permanent income bonus. Maps share the town layout; names, prices and looks change.
+  const MAPS = [
+    { name: 'Homestead', price: 1, names: {}, groups: {},
+      ground: ['#7fae5a', '#6f9d4c', '#4f7a36'], plaza: '#c9b48a',
+      tree: { trunk: { pine: '#7a4f2c', oak: '#5e4129', redwood: '#9a4a2c' }, oak: ['#4b6e2c', '#577d33', '#52772f', '#628c3a', '#7aa64a'],
+        pine: ['#2f7a3d', '#378a46', '#41994f'], redwood: ['#1f4a2c', '#255533', '#2c603a', '#336b40', '#3b7748'],
+        maple: ['#c4472b', '#d65a2e', '#cf4f2c', '#e07a33', '#f0a24a'], mapleTrunk: '#6e4a32' } },
+    { name: 'Snowy North', price: 1.5, snow: true,
+      names: { wood: 'Spruce', oak: 'Birch', redwood: 'Giant Fir', sap: 'Birch Sap', syrup: 'Birch Syrup' },
+      groups: { maple: 'Birch Sap & Syrup', reserve: 'Giant Fir Reserve', village: 'Spruce Village' },
+      ground: ['#e6edf1', '#d8e2e8', '#9fb0ba'], plaza: '#c9d2d9',
+      tree: { trunk: { pine: '#5e4129', oak: '#ece8df', redwood: '#6b3b2a' }, oak: ['#d9b54a', '#e3c25a', '#c9a43e', '#efd27a', '#f5e09a'],
+        pine: ['#244f3c', '#2b5e45', '#316b4e'], redwood: ['#1c3f31', '#214837', '#26513d', '#2b5a43', '#316349'],
+        maple: ['#e8903a', '#f0a43a', '#e08a30', '#f5c45a', '#fad87a'], mapleTrunk: '#ece8df' } },
+    { name: 'Tropical Coast', price: 2,
+      names: { wood: 'Bamboo', oak: 'Mahogany', redwood: 'Teak', sap: 'Coconuts', syrup: 'Coconut Oil' },
+      groups: { maple: 'Coconut Grove', reserve: 'Teak Reserve', village: 'Bamboo Village' },
+      ground: ['#8cc45a', '#7db84e', '#3f7f3a'], plaza: '#ead9a8',
+      tree: { trunk: { pine: '#7fb04a', oak: '#7a3b28', redwood: '#8a5a32' }, oak: ['#245a2a', '#2f6b32', '#2a6330', '#3a7a3a', '#4f9142'],
+        pine: ['#6aa843', '#7fb04a', '#94c45a'], redwood: ['#2d5a26', '#346430', '#3d6e2f', '#457836', '#4f823d'],
+        maple: ['#3f8a33', '#4f9a3a', '#468f36', '#5aa646', '#6ab450'], mapleTrunk: '#a8834f' } },
+  ];
+  const prestige = { map: 0, bonus: 0, moves: 0 };
+  const MAP = () => MAPS[prestige.map] || MAPS[0];
+  const MOVE_MIN = 250000;
+  const moveGain = () => stats.earned < MOVE_MIN ? 0 : Math.floor(Math.sqrt(stats.earned / 50000)) / 10;
+  const pct = v => `+${Math.round(v * 100)}%`;
+  const incomeMul = () => [1, 1.1, 1.25, 1.5][level.hq] * (1 + prestige.bonus);
   const rSaw = () => [1, 1.25, 1.5][level.r_saw];
   const rEng = () => [1, 1.2, 1.4][level.r_engine];
   const rMarket = () => [1, 1.1, 1.2, 1.3][level.r_market];
@@ -286,7 +315,7 @@
     { name: 'BIG MARKET', awning: '#2f9d8f' }, { name: 'SUPERSTORE', awning: '#c9a227' },
     { name: 'MEGASTORE', awning: '#8a5bc4' }, { name: 'FLAGSHIP STORE', awning: '#2b2a22' },
   ];
-  const unitPrice = kind => Math.round((PRICE[kind] + level.price + (kind === 'plank' ? [0, 4, 8][level.kiln] : 0)) * rMarket());
+  const unitPrice = kind => Math.round((PRICE[kind] + level.price + (kind === 'plank' ? [0, 4, 8][level.kiln] : 0)) * rMarket() * MAP().price);
   const upgradeTitle = (u, lv) => lv >= u.costs.length ? u.name
     : lv === 0 && u.hire ? u.hire : `${u.name} · Lv ${lv + (u.hire ? 1 : 2)}`;
   const upgradeNote = (u, lv) => lv > 0 && u.more ? u.more : u.note;
@@ -1166,10 +1195,11 @@
     // only rebuild when something visible changed, so buttons don't flicker under a finger
     const key = items.map(u => level[u.id] + (cash >= (u.costs[level[u.id]] ?? Infinity) ? 'y' : 'n')).join('|') +
       (panelGroup.id === 'dispatch' ? JSON.stringify(dispatch) + LOGS.map(k => Math.floor(wh[k] / 10) + ':' + stock[k]).join() : '') +
-      (research ? research.id + Math.ceil(research.total - research.t) : '');
+      (research ? research.id + Math.ceil(research.total - research.t) : '') +
+      (panelGroup.id === 'move' ? moveAsk + Math.floor(stats.earned / 1000) + ':' + prestige.map : '');
     if (key === panelKey) return;
     panelKey = key;
-    const controls = panelGroup.id === 'dispatch' && level.dispatch ? dispatchControls() : '';
+    const controls = panelGroup.id === 'dispatch' && level.dispatch ? dispatchControls() : panelGroup.id === 'move' ? moveControls() : '';
     ui.panelList.innerHTML = controls + items.map(u => {
       const lv = level[u.id], max = lv >= u.costs.length, blocked = u.needs && !level[u.needs];
       const cost = u.costs[lv];
@@ -1194,6 +1224,12 @@
   ui.panelList.addEventListener('click', e => {
     const b = e.target.closest('[data-buy]');
     if (b) buy(b.dataset.buy);
+    const mv = e.target.closest('[data-move]');
+    if (mv) {
+      if (mv.dataset.move === 'go') moveMap();
+      moveAsk = mv.dataset.move === 'ask';
+      panelKey = ''; renderPanel();
+    }
     const c = e.target.closest('[data-set]');
     if (c) {
       const [group, key] = c.dataset.set.split('.'), val = c.dataset.val;
@@ -1205,10 +1241,53 @@
     }
   });
 
+  let moveAsk = false, FRESH = null;
+  function moveNote() {
+    const g = moveGain();
+    return g ? `Sell for ${pct(g)} income forever` : `Earn $${MOVE_MIN.toLocaleString()} to sell · $${Math.floor(stats.earned).toLocaleString()} so far`;
+  }
+  function moveControls() {
+    const m = MAP(), next = MAPS[Math.min(MAPS.length - 1, prestige.map + 1)], g = moveGain();
+    const where = next === m ? `start ${m.name} again` : `move to ${next.name}`;
+    const intro = `<div class="ctl-sec"><h3>${m.name}</h3><p>Income bonus now: ${pct(prestige.bonus)}. Earned on this map: $${Math.floor(stats.earned).toLocaleString()}.</p>` +
+      `<p>Selling resets your town, upgrades and cash. You keep the income bonus, finished Research and the Dispatch Office with its settings.` +
+      `${next !== m ? ` ${next.name} pays ${next.price}× for everything.` : ''}</p></div>`;
+    if (moveAsk && g) return intro + `<div class="up"><div class="up-text"><div class="up-name">Sell everything and ${where}?</div><div class="up-note">Bonus becomes ${pct(prestige.bonus + g)}</div></div>` +
+      `<button type="button" data-move="go">Yes, sell</button></div><div class="up"><div class="up-text"><div class="up-note">Changed your mind?</div></div><button type="button" data-move="no">Cancel</button></div>`;
+    return intro + `<div class="up"><div class="up-text"><div class="up-name">Sell & ${where}</div><div class="up-note">${g ? `${pct(g)} income forever` : `Earn $${MOVE_MIN.toLocaleString()} on this map first`}</div></div>` +
+      `<button type="button" data-move="ask" ${g ? '' : 'disabled'}>Sell</button></div>`;
+  }
+  function moveMap() {
+    const g = moveGain();
+    if (!g || !FRESH) return;
+    const d = JSON.parse(JSON.stringify(FRESH));
+    for (const u of UPGRADES) if (u.research) d.level[u.id] = level[u.id];
+    d.level.dispatch = level.dispatch;
+    d.dispatch = JSON.parse(JSON.stringify(dispatch));
+    d.prestige = { map: Math.min(MAPS.length - 1, prestige.map + 1), bonus: Math.round((prestige.bonus + g) * 100) / 100, moves: prestige.moves + 1 };
+    d.savedAt = Date.now();
+    fx.length = 0; belt = []; research = null; gather.node = null; moveAsk = false;
+    const zero = o => { for (const k in o) { if (typeof o[k] === 'number') o[k] = 0; else if (o[k] && typeof o[k] === 'object') zero(o[k]); } };
+    zero(pending); zero(pendingV); kilnPend = 0;
+    applySave(d);
+    toast(`Welcome to ${MAP().name}! Income bonus ${pct(prestige.bonus)}`);
+    save(true);
+  }
+  const BASE_NAMES = { ...ITEM_NAME }, BASE_GROUPS = Object.fromEntries(GROUPS.map(g => [g.id, g.name]));
+  function applyMapTheme() {
+    const m = MAP();
+    Object.assign(ITEM_NAME, BASE_NAMES, m.names);
+    for (const g of GROUPS) g.name = m.groups[g.id] || BASE_GROUPS[g.id];
+    const root = document.documentElement.style;
+    root.setProperty('--ground', m.ground[0]); root.setProperty('--ground-dark', m.ground[1]); root.setProperty('--edge', m.ground[2]);
+    for (const k in varCache) delete varCache[k];
+    if (R3) R3.retheme();
+  }
+
   const seg = (set, options, current) => `<div class="seg">${options.map(([val, label]) =>
     `<button type="button" data-set="${set}" data-val="${val}" class="${String(current) === String(val) ? 'on' : ''}">${label}</button>`).join('')}</div>`;
   function dispatchControls() {
-    const name = { wood: 'Pine', oak: 'Oak', redwood: 'Redwood' };
+    const name = ITEM_NAME;
     const rows = LOGS.map(k => {
       const r = dispatch.reserve[k], low = r && wh[k] < r;
       return `<div class="ctl"><div class="ctl-head"><b>${name[k]}</b><span class="${low ? 'warn' : ''}">Warehouse ${wh[k]}${r ? ` / keep ${r}` : ''}${k !== 'redwood' ? ` · shelf ${stock[k]}` : ''}</span></div>` +
@@ -1996,7 +2075,7 @@
 
   function drawGroundMarks(time) {
     // dirt plaza for the town, and the customer road
-    ctx.fillStyle = '#c9b48a';
+    ctx.fillStyle = MAP().plaza;
     groundRect(CX + 40, CY + 380, 2200, 1440, 30); ctx.fill();
     groundRect(CX - 440, CY + 1180, 1280, 400, 30); ctx.fill();
     groundRect((ANNEX.x0 + ANNEX.x1) / 2 + 40, CY + 60, ANNEX.x1 - ANNEX.x0 + 160, 840, 30); ctx.fill();
@@ -2021,7 +2100,7 @@
       }
     }
     // roads out to the districts
-    ctx.fillStyle = '#c9b48a';
+    ctx.fillStyle = MAP().plaza;
     for (const r of ROADS) { groundRect((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, r.x1 - r.x0, r.y1 - r.y0, 10); ctx.fill(); }
     drawTracks();
     for (const id in DISTRICTS) drawDistrict(id);
@@ -2189,9 +2268,9 @@
     ctx.lineTo(sx - 5, sy + 10); ctx.lineTo(sx - 5, sy - 2); ctx.lineTo(sx - 12, sy - 2); ctx.closePath(); ctx.fill();
     const bob = Math.sin(time * 2 + g.x) * 2;
     tag(g.name, sx, sy - 66 + bob, 17, '#fffaf0');
-    const note = !open.length ? (items.every(u => level[u.id] >= u.costs.length) ? 'All upgraded' : 'Nothing to buy yet')
+    const note = g.id === 'move' ? moveNote() : !open.length ? (items.every(u => level[u.id] >= u.costs.length) ? 'All upgraded' : 'Nothing to buy yet')
       : `${open.length} upgrade${open.length > 1 ? 's' : ''} · from $${cheapest.toLocaleString()}`;
-    flatLabel(note, sx, sy - 40 + bob, 15, afford ? '#1f5a2a' : '#2b2a22', 600);
+    flatLabel(note, sx, sy - 40 + bob, 15, afford || (g.id === 'move' && moveGain()) ? '#1f5a2a' : '#2b2a22', 600);
   }
 
   function drawDecor(d) {
@@ -3096,7 +3175,7 @@
 
   function treeBody(sx, sy, s, species, wob) {
     const n = { species };
-    const trunk = { pine: '#7a4f2c', oak: '#5e4129', redwood: '#9a4a2c' }[n.species];
+    const pal = MAP().tree, trunk = pal.trunk[n.species];
     ctx.fillStyle = trunk;
     const th = n.species === 'redwood' ? 60 : 34;
     roundRect(sx - 6 * s, sy - th * s, 12 * s, (th + 2) * s, 4); ctx.fill();
@@ -3107,19 +3186,24 @@
     if (n.species === 'oak') {
       // broad, round crown
       const blob = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x * s, y * s, r * s, 0, Math.PI * 2); ctx.fill(); };
-      blob(0, -50, 32, '#4b6e2c'); blob(-18, -58, 22, '#577d33'); blob(18, -56, 23, '#52772f');
-      blob(0, -74, 24, '#628c3a'); blob(-8, -80, 11, '#7aa64a');
+      const c = pal.oak;
+      blob(0, -50, 32, c[0]); blob(-18, -58, 22, c[1]); blob(18, -56, 23, c[2]);
+      blob(0, -74, 24, c[3]); blob(-8, -80, 11, c[4]);
     } else {
       // conifer: stacked triangles (pine bright green, redwood deep and tall)
       const layers = n.species === 'redwood' ? 5 : 3;
       const base = n.species === 'redwood' ? -40 : -26, step = n.species === 'redwood' ? 22 : 20;
-      const cols = n.species === 'redwood' ? ['#1f4a2c', '#255533', '#2c603a', '#336b40', '#3b7748'] : ['#2f7a3d', '#378a46', '#41994f'];
+      const cols = n.species === 'redwood' ? pal.redwood : pal.pine;
       for (let i = 0; i < layers; i++) {
         const y = base - i * step, half = (26 - i * (n.species === 'redwood' ? 3.5 : 5)) * 1.0;
         ctx.fillStyle = cols[i];
         ctx.beginPath();
         ctx.moveTo(-half * s, y * s); ctx.lineTo(half * s, y * s); ctx.lineTo(0, (y - 34) * s);
         ctx.closePath(); ctx.fill();
+        if (MAP().snow) {   // snow caps
+          ctx.fillStyle = '#f4f7f9';
+          ctx.beginPath(); ctx.moveTo(-half * 0.4 * s, (y - 20) * s); ctx.lineTo(half * 0.4 * s, (y - 20) * s); ctx.lineTo(0, (y - 34) * s); ctx.closePath(); ctx.fill();
+        }
       }
     }
     ctx.restore();
@@ -3141,13 +3225,15 @@
     const wob = Math.sin(n.shake * 30) * n.shake * 3;
     ctx.fillStyle = 'rgba(30,40,20,.26)';
     ctx.beginPath(); ctx.ellipse(sx + 6, sy + 2, 28, 28 * TILT, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#6e4a32';
+    const mp = MAP().tree;
+    ctx.fillStyle = mp.mapleTrunk;
     roundRect(sx - 6, sy - 36, 12, 38, 4); ctx.fill();
     ctx.save();
     ctx.translate(sx + wob, sy);
     const blob = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); };
-    blob(0, -54, 28, '#c4472b'); blob(-16, -62, 19, '#d65a2e'); blob(16, -60, 20, '#cf4f2c');
-    blob(0, -78, 21, '#e07a33'); blob(-6, -84, 10, '#f0a24a');
+    const c = mp.maple;
+    blob(0, -54, 28, c[0]); blob(-16, -62, 19, c[1]); blob(16, -60, 20, c[2]);
+    blob(0, -78, 21, c[3]); blob(-6, -84, 10, c[4]);
     ctx.restore();
     // sap bucket on the trunk, filling up
     ctx.fillStyle = '#9aa3ad';
@@ -3666,10 +3752,10 @@
     if (ui.map.width !== size * DPR) { ui.map.width = size * DPR; ui.map.height = size * DPR; }
     const m = mapCtx;
     m.setTransform(DPR, 0, 0, DPR, 0, 0);
-    m.fillStyle = '#4f7a36'; m.fillRect(0, 0, size, size);
+    m.fillStyle = MAP().ground[2]; m.fillRect(0, 0, size, size);
     const rect = (x0, y0, x1, y1, c) => { m.fillStyle = c; m.fillRect(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k); };
-    rect(CX - 1080, CY - 720, CX + 1160, CY + 1160, '#c9b48a');
-    for (const r of ROADS) rect(r.x0, r.y0, r.x1, r.y1, '#c9b48a');
+    rect(CX - 1080, CY - 720, CX + 1160, CY + 1160, MAP().plaza);
+    for (const r of ROADS) rect(r.x0, r.y0, r.x1, r.y1, MAP().plaza);
     rect(SEA.x0, 0, WORLD_W, SEA.y1, '#4f8fb3');
     for (const id in DISTRICTS) { const d = DISTRICTS[id]; rect(d.x0, d.y0, d.x1, d.y1, level[id] ? d.ground : 'rgba(30,40,24,.55)'); }
     houses.forEach((h, i) => { if (h.state === 'done') rect(HOUSE_SPOTS[i].x - 40, HOUSE_SPOTS[i].front - 60, HOUSE_SPOTS[i].x + 40, HOUSE_SPOTS[i].front, h.color); });
@@ -3709,7 +3795,7 @@
       workshop: { planks: workshop.planks, chair: workshop.chair, table: workshop.table }, showroom: { ...showroom },
       gen: { fuel: gen.fuel, pellets: gen.pellets }, mill: { chips: mill.chips, water: Math.floor(mill.water), out: mill.out },
       coalKiln: { oak: coalKiln.oak, out: coalKiln.out }, shackCoal: shack.coal, chips: saw.chips,
-      stats, contract, research, dispatch, vstock: { ...vstock }, builder: { ...builder },
+      stats, contract, research, dispatch, prestige: { ...prestige }, vstock: { ...vstock }, builder: { ...builder },
       houses: houses.map(h => ({ s: h.state, p: Math.round(h.p * 100) / 100 })),
       level: { ...level }, paid: { ...paid }, cash, piles: { ...pileAmt }, served,
       hp: nodes.map(n => n.type === 'maple' ? Math.round(n.sap * 100) / 100 : n.hp),
@@ -3735,6 +3821,8 @@
     if (d.stats) { Object.assign(stats, d.stats); stats.sold = { ...(d.stats.sold || {}) }; }
     contract = d.contract || null;
     research = d.research || null;
+    Object.assign(prestige, { map: 0, bonus: 0, moves: 0 }, d.prestige || {});
+    applyMapTheme();
     if (d.dispatch) { Object.assign(dispatch, d.dispatch); dispatch.reserve = { wood: 0, oak: 0, redwood: 0, ...(d.dispatch.reserve || {}) }; }
     merge(vstock, d.vstock); merge(builder, d.builder);
     merge(level, d.level); merge(paid, d.paid);
@@ -3799,6 +3887,7 @@
 
   function start(saved) {
     resize();
+    FRESH = snapshot();
     if (!applySave(saved)) applySave(loadLocal());
     afterUpgrade();
     updateHud();

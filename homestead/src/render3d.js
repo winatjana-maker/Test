@@ -97,6 +97,9 @@
     // ---------- Trees ----------
     const TREE = {};
     function makeTreeTemplates() {
+      const mi = prestige.map;
+      if (mi === 1) return snowTrees();
+      if (mi === 2) return tropicTrees();
       TREE.pine = merged([[G.cyl(0.14, 0.2, 1.0, 6), '#7a4f2c', M(0, 0.5, 0)],
         [G.cone(1.1, 1.4), '#2f7a45', M(0, 1.4, 0)], [G.cone(0.88, 1.25), '#2a6e3f', M(0, 2.1, 0, 0, 0.6)], [G.cone(0.6, 1.1), '#34834a', M(0, 2.8, 0, 0, 1.2)]]);
       TREE.oak = merged([[G.cyl(0.18, 0.26, 1.3, 6), '#5e4129', M(0, 0.65, 0)],
@@ -109,6 +112,66 @@
         [G.ico(0.62), '#e66a2e', M(0.05, 2.5, -0.1, 0.5, 1)],
         [G.cyl(0.13, 0.1, 0.22, 7), '#9aa3ad', M(0, 0.55, 0.26)]]);
       TREE.stump = merged([[G.cyl(0.22, 0.28, 0.3, 7), '#7a4f2c', M(0, 0.15, 0)], [G.cyl(0.2, 0.2, 0.02, 7), '#e8c48e', M(0, 0.31, 0)]]);
+    }
+    const snowCap = (r, h, y, rot = 0) => [G.cone(r * 0.45, h * 0.42), '#f4f7f9', M(0, y + h * 0.29, 0, 0, rot)];
+    function snowTrees() {
+      TREE.pine = merged([[G.cyl(0.14, 0.2, 1.0, 6), '#5e4129', M(0, 0.5, 0)],
+        [G.cone(1.1, 1.4), '#244f3c', M(0, 1.4, 0)], snowCap(1.1, 1.4, 1.4), [G.cone(0.88, 1.25), '#2b5e45', M(0, 2.1, 0, 0, 0.6)], snowCap(0.88, 1.25, 2.1, 0.6),
+        [G.cone(0.6, 1.1), '#316b4e', M(0, 2.8, 0, 0, 1.2)], snowCap(0.6, 1.1, 2.8, 1.2)]);
+      const birch = (leaves, extra = []) => merged([[G.cyl(0.15, 0.2, 1.6, 6), '#ece8df', M(0, 0.8, 0)],
+        [G.box(0.31, 0.05, 0.1), '#3a3532', M(0, 0.5, 0.12)], [G.box(0.25, 0.05, 0.1), '#3a3532', M(0, 1.0, -0.12)], [G.box(0.22, 0.05, 0.1), '#3a3532', M(0.05, 1.35, 0.1)],
+        [G.ico(0.85), leaves[0], M(0, 2.1, 0)], [G.ico(0.62), leaves[1], M(0.5, 1.8, 0.2, 1, 2)], [G.ico(0.66), leaves[2], M(-0.48, 1.9, -0.1, 2)],
+        [G.ico(0.55), leaves[1], M(0.05, 2.7, -0.1, 0.5, 1)], ...extra]);
+      TREE.oak = birch(['#e3c25a', '#d9b54a', '#efd27a']);
+      TREE.maple = birch(['#f0a43a', '#e8903a', '#f5c45a'], [[G.cyl(0.13, 0.1, 0.22, 7), '#9aa3ad', M(0, 0.55, 0.24)]]);
+      TREE.redwood = merged([[G.cyl(0.26, 0.4, 2.6, 7), '#6b3b2a', M(0, 1.3, 0)],
+        [G.cone(1.3, 1.9), '#1c3f31', M(0, 2.9, 0)], snowCap(1.3, 1.9, 2.9), [G.cone(1.05, 1.7), '#214837', M(0, 3.8, 0, 0, 0.7)], snowCap(1.05, 1.7, 3.8, 0.7),
+        [G.cone(0.72, 1.5), '#26513d', M(0, 4.6, 0, 0, 1.3)], snowCap(0.72, 1.5, 4.6, 1.3)]);
+      TREE.stump = merged([[G.cyl(0.22, 0.28, 0.3, 7), '#5e4129', M(0, 0.15, 0)], [G.cyl(0.2, 0.2, 0.04, 7), '#f4f7f9', M(0, 0.32, 0)]]);
+    }
+    function tropicTrees() {
+      const stalk = (x, z, h, lean) => [[G.cyl(0.07, 0.08, h, 6), '#7fb04a', M(x, h / 2, z, lean, 0, -lean)],
+        [G.cyl(0.085, 0.085, 0.05, 6), '#5f8f3a', M(x + lean * h * 0.15, h * 0.3, z + lean * h * 0.15)],
+        [G.cyl(0.085, 0.085, 0.05, 6), '#5f8f3a', M(x + lean * h * 0.3, h * 0.6, z + lean * h * 0.3)],
+        [G.ico(0.32, 0), '#6aa843', M(x + lean * h * 0.5, h, z + lean * h * 0.5, 0, x * 5)]];
+      TREE.pine = merged([...stalk(0, 0, 3.4, 0), ...stalk(0.25, 0.1, 3.0, 0.08), ...stalk(-0.2, 0.15, 2.7, -0.1), ...stalk(0.05, -0.25, 3.1, 0.05), ...stalk(-0.15, -0.15, 2.4, -0.06)]);
+      TREE.oak = merged([[G.cyl(0.2, 0.3, 1.5, 6), '#7a3b28', M(0, 0.75, 0)],
+        [G.ico(1.15), '#2f6b32', M(0, 2.0, 0, 0, 0, 0, 1.2, 0.7, 1.2)], [G.ico(0.8), '#3a7a3a', M(0.55, 2.4, 0.2, 1, 0, 0, 1, 0.7, 1)], [G.ico(0.8), '#245a2a', M(-0.5, 2.3, -0.2, 2, 0, 0, 1, 0.7, 1)]]);
+      TREE.redwood = merged([[G.cyl(0.24, 0.36, 3.6, 7), '#8a5a32', M(0, 1.8, 0)],
+        [G.ico(1.6), '#3d6e2f', M(0, 3.8, 0, 0, 0, 0, 1.3, 0.45, 1.3)], [G.ico(1.2), '#457836', M(0.3, 4.4, -0.2, 1, 0, 0, 1.2, 0.45, 1.2)], [G.ico(0.9), '#346430', M(-0.2, 4.9, 0.1, 2, 0, 0, 1, 0.45, 1)]]);
+      const palm = [];
+      for (let i = 0; i < 6; i++) palm.push([G.cyl(0.13 - i * 0.008, 0.15 - i * 0.008, 0.6, 7), i % 2 ? '#a8834f' : '#977445', M(i * i * 0.012, 0.3 + i * 0.58, 0, 0, 0, -i * 0.03)]);
+      const top = V(0.3, 3.6, 0);
+      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; palm.push([G.box(1.6, 0.05, 0.32), i % 2 ? '#4f9a3a' : '#468f36', M(top.x + Math.cos(a) * 0.7, top.y - 0.2, Math.sin(a) * 0.7, 0, -a, -0.35)]); }
+      for (let i = 0; i < 3; i++) palm.push([G.ico(0.13, 0), '#6b4a2c', M(top.x + Math.cos(i * 2.1) * 0.15, top.y - 0.25, Math.sin(i * 2.1) * 0.15)]);
+      TREE.maple = merged(palm);
+      TREE.stump = merged([[G.cyl(0.22, 0.28, 0.3, 7), '#8a5a32', M(0, 0.15, 0)], [G.cyl(0.2, 0.2, 0.02, 7), '#e8c48e', M(0, 0.31, 0)]]);
+    }
+    const SKY = ['#bfe0ee', '#d8e6ef', '#a8e0f0'];
+    const GRASS = [['#7fae4c', '#6c9c3f'], ['#e6edf1', '#d3dee5'], ['#8cc45a', '#77b04a']];
+    const TUFT = ['#5f9a3a', '#b9c9d2', '#4f9a3a'];
+    let groundMesh, slabs = [], tuftMat;
+    function paintGround() {
+      const [ca, cb] = GRASS[prestige.map] || GRASS[0], a = lin(ca), b = lin(cb), c = new THREE.Color();
+      const pos = groundMesh.geometry.attributes.position, col = groundMesh.geometry.attributes.color;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i);
+        const n = Math.sin(x * 0.35) * Math.cos(z * 0.29) * 0.5 + Math.sin(x * 0.9 + z * 0.7) * 0.25;
+        c.copy(a).lerp(b, 0.5 + n * 0.5); col.setXYZ(i, c.r, c.g, c.b);
+      }
+      col.needsUpdate = true;
+      for (const m of slabs) m.material.color.copy(lin(MAP().plaza));
+      if (tuftMat) tuftMat.color.copy(lin(TUFT[prestige.map] || TUFT[0]));
+      scene.background = lin(SKY[prestige.map] || SKY[0]); scene.fog.color.copy(scene.background);
+    }
+    function retheme() {
+      if (!ready) return;
+      paintGround();
+      makeTreeTemplates();
+      for (const m of treeMesh.values()) scene.remove(m.tree, m.stump);
+      treeMesh.clear();
+      for (const f of fallPool) for (const k in f.meshes) scene.remove(f.meshes[k]);
+      fallPool.length = 0;
     }
     const treeMesh = new Map();
     const fallPool = [];
@@ -198,7 +261,7 @@
       }
       g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
       const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
-      ground.receiveShadow = true; scene.add(ground);
+      ground.receiveShadow = true; scene.add(ground); groundMesh = ground;
       // dirt plaza + roads, rounded slabs a hair above the grass
       const slab = (cx, cy, w, d, color, y = 0.01, r = 0.6) => {
         const sh = new THREE.Shape(), x0 = -w / 2, z0 = -d / 2;
@@ -209,9 +272,9 @@
         const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: lin(color), roughness: 1 }));
         m.position.set(cx, y, cy); m.receiveShadow = true; scene.add(m); return m;
       };
-      slab(wx(CX + 40), wz(CY + 380), 2200 * S, 1440 * S, '#c9b48a');
-      slab(wx(CX - 440), wz(CY + 1180), 1280 * S, 400 * S, '#c9b48a');
-      for (const r of ROADS) slab(wx((r.x0 + r.x1) / 2), wz((r.y0 + r.y1) / 2), (r.x1 - r.x0) * S, (r.y1 - r.y0) * S, '#c9b48a', 0.012, 0.3);
+      slabs.push(slab(wx(CX + 40), wz(CY + 380), 2200 * S, 1440 * S, '#c9b48a'));
+      slabs.push(slab(wx(CX - 440), wz(CY + 1180), 1280 * S, 400 * S, '#c9b48a'));
+      for (const r of ROADS) slabs.push(slab(wx((r.x0 + r.x1) / 2), wz((r.y0 + r.y1) / 2), (r.x1 - r.x0) * S, (r.y1 - r.y0) * S, '#c9b48a', 0.012, 0.3));
       // sea
       const sea = new THREE.Mesh(new THREE.PlaneGeometry((WORLD_W - SEA.x0) * S, SEA.y1 * S), new THREE.MeshStandardMaterial({ color: lin('#4f8fb3'), roughness: 0.35, metalness: 0.1 }));
       sea.rotation.x = -Math.PI / 2; sea.position.set(wx((SEA.x0 + WORLD_W) / 2), 0.04, wz(SEA.y1 / 2)); sea.receiveShadow = true; scene.add(sea);
@@ -233,7 +296,8 @@
     function makeDecor() {
       const tuft = G.cone(0.08, 0.36, 4); tuft.translate(0, 0.18, 0);
       const tufts = decor.filter(d => d.kind === 'tuft'), flowers = decor.filter(d => d.kind !== 'tuft');
-      const im = new THREE.InstancedMesh(tuft, new THREE.MeshStandardMaterial({ color: lin('#5f9a3a'), flatShading: true }), tufts.length);
+      tuftMat = new THREE.MeshStandardMaterial({ color: lin('#5f9a3a'), flatShading: true });
+      const im = new THREE.InstancedMesh(tuft, tuftMat, tufts.length);
       tufts.forEach((d, i) => { dummy.position.set(wx(d.x), 0, wz(d.y)); dummy.rotation.set(0, d.hue * 6, (d.hue - 0.5) * 0.4); dummy.scale.setScalar(0.8 + d.hue * 0.6); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
       scene.add(im);
       const fl = new THREE.InstancedMesh(G.ico(0.09, 0), new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), flowers.length);
@@ -422,6 +486,7 @@
       makeGround(); makeDecor(); makeStore(); makeTiles(); makeZones(); makeProps();
       whParts = [makeWarehouse(WH, 'warehouse'), makeWarehouse(ANNEX, 'annex', ANNEX_DX)];
       ready = true;
+      paintGround();
       resize();
     }
     function resize() {
@@ -511,7 +576,8 @@
       for (const t of tileMeshes) {
         const items = UPGRADES.filter(u => u.group === t.gp.id), open = items.filter(canBuy);
         const onT = inRect(t.gp, TILE_SIZE, TILE_SIZE), afford = open.some(u => cash >= u.costs[level[u.id]]);
-        t.m.material.color.copy(lin(!open.length ? '#9cc27f' : onT ? '#9a9a8c' : afford ? '#6f9c6a' : '#7c7c72'));
+        const isMove = t.gp.id === 'move', ok = isMove ? moveGain() > 0 : afford;
+        t.m.material.color.copy(lin(onT ? '#9a9a8c' : isMove ? (ok ? '#6f9c6a' : '#7c7c72') : !open.length ? '#9cc27f' : afford ? '#6f9c6a' : '#7c7c72'));
         t.a.position.y = 0.26 + Math.abs(Math.sin(time * 2 + t.gp.x)) * 0.12;
       }
 
@@ -719,9 +785,9 @@
         const afford = open.some(u => cash >= u.costs[level[u.id]]);
         const bob = Math.sin(time * 2 + g.x) * 2;
         tag(g.name, sx, sy - 58 + bob, 17, '#fffaf0');
-        const note = !open.length ? (items.every(u => level[u.id] >= u.costs.length) ? 'All upgraded' : 'Nothing to buy yet')
+        const note = g.id === 'move' ? moveNote() : !open.length ? (items.every(u => level[u.id] >= u.costs.length) ? 'All upgraded' : 'Nothing to buy yet')
           : `${open.length} upgrade${open.length > 1 ? 's' : ''} · from $${cheapest.toLocaleString()}`;
-        tag(note, sx, sy - 34 + bob, 13, afford ? '#c8f5c8' : '#fffaf0');
+        tag(note, sx, sy - 34 + bob, 13, afford || (g.id === 'move' && moveGain()) ? '#c8f5c8' : '#fffaf0');
       }
       {
         const [dx, dy] = project(DROP.x, DROP.y); tag('Restock', dx, dy - 10, 13, '#fffaf0');
@@ -766,7 +832,7 @@
       const btn = document.getElementById('view-toggle');
       if (btn) btn.textContent = on ? '2D view' : '3D view';
     }
-    return { set, render, resize, project, get on() { return on; } };
+    return { set, render, resize, project, retheme, get on() { return on; } };
   })();
   function view3d() { return !!(R3 && R3.on); }
   {

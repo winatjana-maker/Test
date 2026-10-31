@@ -9,7 +9,7 @@ Read this first when picking the project back up.
   The artifact has `db` + `user` capabilities (account save); omit `capabilities` on republish to keep them.
 - **3D look test (separate page):** https://claude.ai/artifact/NWrMz17zAH9uepr6a65e9h, source `look3d/index.html` (Three.js r128 from cdnjs). The player asked for a Whiteout-style real-3D look; this is the trial before converting the game. Screen shake was removed at the player's request; building bounce and tree wobble stay.
 - **Source:** `homestead/src/head.html` (title, CSS, HUD markup, Three.js tag), `homestead/src/game.js` (all game code, inside `<script>`) and `homestead/src/render3d.js` (3D view, inserted inside the game's scope before the Loop section).
-- **Build:** `python3 build.py` (run inside `homestead/`).
+- **Build:** `python3 build.py` (run inside `homestead/`). One-off patch scripts live in `homestead/tools/`. Test files go in `/home/user/Test/.test/` (gitignored).
 - **Branch:** `claude/homestead-game`. Commit and push after each step.
 
 ## About the player
@@ -26,6 +26,13 @@ Read this first when picking the project back up.
 - `R3` (render3d.js) reads the same game state each frame. The 2D canvas stays on top as a clear overlay for labels, pop-up text, the guide arrow and the joystick; `toScreen` projects through the 3D camera when 3D is on, and flying items are unprojected back into 3D.
 - Round 1 (done): ground/plaza/roads/sea/districts, store with shelves, upgrade tiles, zones, trees/maples (culled by distance, see-through when in front of the player), falling trees, people (player, customers, porter, tapper, villagers), bots/forklift/sapbot/vans/drone, warehouse + annex racks, pallets, conveyor, cash piles, flying items.
 - Later rounds: real interiors and machines for sawmill, shack, workshop, industry, rail, harbor and village (they are simple stand-ins now), phone performance pass, then make 3D the default.
+
+## Maps and prestige
+
+- **Sell & Move** tile (`move` group, `P(-70, 520)`): after earning $250k on a map (`MOVE_MIN`, uses `stats.earned`), sell for a permanent income bonus (`moveGain()`: floor(sqrt(earned / 50k)) × 10%). The panel asks to confirm.
+- `MAPS`: Homestead → Snowy North (1.5× prices) → Tropical Coast (2× prices); after the last map, selling restarts it with more bonus. Each map changes item names (`ITEM_NAME`), some tile names, ground/plaza colors, 2D tree palettes (snow caps), and 3D tree shapes (`snowTrees`, `tropicTrees`). `applyMapTheme()` runs on load and on move; `R3.retheme()` rebuilds 3D trees and ground.
+- A move rebuilds the town from `FRESH` (a snapshot taken at startup), keeping finished Research levels, the Dispatch Office and its settings, and `prestige` {map, bonus, moves}. The bonus multiplies `incomeMul()`.
+- Ideas not built yet: a third/fourth map (desert, mountain valley), map-specific buildings or mechanics, a bigger map per move.
 
 ## Game overview (current)
 
