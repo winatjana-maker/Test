@@ -818,6 +818,17 @@
         ctx.fillStyle = f.color; ctx.fillText(f.text, sx, y);
         ctx.globalAlpha = 1;
       }
+      // freight orders: train, ship and the delivery truck
+      const card = (title, color, order, got, keys, x, y) => {
+        const [sx, sy] = project(x, y), h = 26 + keys.length * 22, top = sy - 150 - h;
+        if (sx < -120 || sx > W + 120 || top > H || sy < 0) return;
+        ctx.fillStyle = '#fffaf0'; roundRect(sx - 115, top, 230, h, 12); ctx.fill();
+        flatLabel(title, sx, top + 14, 13, color);
+        keys.forEach((k, i) => orderRow(k, got[k], order[k], sx, top + 36 + i * 22, 230));
+      };
+      if (level.rail && train.state === 'load') card('FREIGHT ORDER · pays 2×', '#5a4630', train.order, train.got, Object.keys(train.order), train.x - 200, TRACK_Y);
+      if (level.harbor && ship.state === 'load') card('EXPORT ORDER · pays 3×', '#2b3a4a', ship.order, ship.got, Object.keys(ship.order), ship.x, SHIP.y);
+      if (level.dock && truck.state === 'load') card('TRUCK ORDER', '#5a4630', truck.order, truck.got, LOGS, truck.x, DOCK.y);
       drawGuide(time);
       ctx.restore();
       drawStick();

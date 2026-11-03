@@ -2475,6 +2475,16 @@
     ctx.fillStyle = color; ctx.fillText(text, x, y);
     ctx.textBaseline = 'alphabetic';
   }
+  // one line of a freight order card: icon, item name, then loaded / wanted
+  function orderRow(k, got, need, cx, y, w) {
+    const left = cx - w / 2;
+    drawItem(k, left + 20, y);
+    ctx.font = `600 14px ${FONT}`; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left'; ctx.fillStyle = '#2b2a22'; ctx.fillText(ITEM_NAME[k] || k, left + 38, y);
+    ctx.font = `600 15px ${FONT}`; ctx.textAlign = 'right'; ctx.fillStyle = got >= need ? '#3f9d4f' : '#2b2a22';
+    ctx.fillText(`${got}/${need}`, left + w - 12, y);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  }
   let tagSink = null;
   function tag(text, x, y, size, color, bg = 'rgba(43,42,34,.78)') {
     if (tagSink) { tagSink.push([text, x, y, size, color, bg]); return; }
@@ -3101,12 +3111,9 @@
       const h = 26 + keys.length * 22;
       const cx = sx - 75, cy = sy - 100 - h;
       ctx.fillStyle = '#fffaf0';
-      roundRect(cx - 90, cy, 180, h, 12); ctx.fill();
+      roundRect(cx - 115, cy, 230, h, 12); ctx.fill();
       flatLabel('FREIGHT ORDER · pays 2×', cx, cy + 14, 13, '#5a4630');
-      keys.forEach((k, i) => {
-        drawItem(k, cx - 50, cy + 36 + i * 22);
-        flatLabel(`${train.got[k]}/${train.order[k]}`, cx + 20, cy + 36 + i * 22, 15, train.got[k] >= train.order[k] ? '#3f9d4f' : '#2b2a22');
-      });
+      keys.forEach((k, i) => orderRow(k, train.got[k], train.order[k], cx, cy + 36 + i * 22, 230));
     }
   }
 
@@ -3277,12 +3284,9 @@
     if (ship.state === 'load') {
       const keys = Object.keys(ship.order);
       const h = 26 + keys.length * 22, cx = sx - 60, cy = sy + 24;
-      ctx.fillStyle = '#fffaf0'; roundRect(cx - 95, cy, 190, h, 12); ctx.fill();
+      ctx.fillStyle = '#fffaf0'; roundRect(cx - 115, cy, 230, h, 12); ctx.fill();
       flatLabel('EXPORT ORDER · pays 3×', cx, cy + 14, 13, '#2b3a4a');
-      keys.forEach((k, i) => {
-        drawItem(k, cx - 50, cy + 36 + i * 22);
-        flatLabel(`${ship.got[k]}/${ship.order[k]}`, cx + 22, cy + 36 + i * 22, 15, ship.got[k] >= ship.order[k] ? '#3f9d4f' : '#2b2a22');
-      });
+      keys.forEach((k, i) => orderRow(k, ship.got[k], ship.order[k], cx, cy + 36 + i * 22, 230));
     }
   }
 
@@ -3808,11 +3812,8 @@
     if (truck.state === 'load') {
       const o = truck.order, g = truck.got;
       ctx.fillStyle = '#fffaf0';
-      roundRect(sx - 72, sy - 160, 144, 88, 10); ctx.fill();
-      LOGS.forEach((k, i) => {
-        drawItem(k, sx - 36, sy - 144 + i * 20);
-        flatLabel(`${g[k]}/${o[k]}`, sx + 10, sy - 144 + i * 20, 15, '#2b2a22');
-      });
+      roundRect(sx - 90, sy - 160, 180, 88, 10); ctx.fill();
+      LOGS.forEach((k, i) => orderRow(k, g[k], o[k], sx, sy - 144 + i * 20, 180));
       const waiting = LOGS.some(k => g[k] < o[k] && !wh[k] && !pallet[k]);
       flatLabel(waiting ? 'Needs warehouse stock' : 'Loading…', sx, sy - 84, 13, waiting ? '#d9644a' : '#3f9d4f');
     }
@@ -4829,6 +4830,17 @@
         ctx.fillStyle = f.color; ctx.fillText(f.text, sx, y);
         ctx.globalAlpha = 1;
       }
+      // freight orders: train, ship and the delivery truck
+      const card = (title, color, order, got, keys, x, y) => {
+        const [sx, sy] = project(x, y), h = 26 + keys.length * 22, top = sy - 150 - h;
+        if (sx < -120 || sx > W + 120 || top > H || sy < 0) return;
+        ctx.fillStyle = '#fffaf0'; roundRect(sx - 115, top, 230, h, 12); ctx.fill();
+        flatLabel(title, sx, top + 14, 13, color);
+        keys.forEach((k, i) => orderRow(k, got[k], order[k], sx, top + 36 + i * 22, 230));
+      };
+      if (level.rail && train.state === 'load') card('FREIGHT ORDER · pays 2×', '#5a4630', train.order, train.got, Object.keys(train.order), train.x - 200, TRACK_Y);
+      if (level.harbor && ship.state === 'load') card('EXPORT ORDER · pays 3×', '#2b3a4a', ship.order, ship.got, Object.keys(ship.order), ship.x, SHIP.y);
+      if (level.dock && truck.state === 'load') card('TRUCK ORDER', '#5a4630', truck.order, truck.got, LOGS, truck.x, DOCK.y);
       drawGuide(time);
       ctx.restore();
       drawStick();
