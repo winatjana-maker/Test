@@ -7,8 +7,7 @@ Read this first when picking the project back up.
 - **Playable game (published):** https://claude.ai/artifact/J1PmAqgWDPj7iC8bvr1dtQ
   Republish to the same URL by passing it as `url` to the Artifact tool.
   The artifact has `db` + `user` capabilities (account save); omit `capabilities` on republish to keep them.
-- **3D look test (separate page):** https://claude.ai/artifact/NWrMz17zAH9uepr6a65e9h, source `look3d/index.html` (Three.js r128 from cdnjs). The player asked for a Whiteout-style real-3D look; this is the trial before converting the game. Screen shake was removed at the player's request; building bounce and tree wobble stay.
-- **Source:** `homestead/src/head.html` (title, CSS, HUD markup, Three.js tag), `homestead/src/game.js` (all game code, inside `<script>`) and `homestead/src/render3d.js` (3D view, inserted inside the game's scope before the Loop section).
+- **Source:** `homestead/src/head.html` (title, CSS, HUD markup) and `homestead/src/game.js` (all game code, inside `<script>`).
 - **Build:** `python3 build.py` (run inside `homestead/`). One-off patch scripts live in `homestead/tools/`. Test files go in `/home/user/Test/.test/` (gitignored).
 - **Branch:** `claude/homestead-game`. Commit and push after each step.
 
@@ -20,17 +19,23 @@ Read this first when picking the project back up.
 - Likes Whiteout Survival–style ads: stacking items, auto-gather, visible logistics.
 - Wants a large, interconnected business with lots of upgrades. Stone and "worlds" were dropped for now.
 
-## 3D view (in progress, staged)
+## 3D view (removed)
 
-- The player chose a Whiteout-style real-3D look and a staged conversion. A **3D view / 2D view** button (bottom right) switches; the choice is remembered in localStorage. Same page, same save.
-- `R3` (render3d.js) reads the same game state each frame. The 2D canvas stays on top as a clear overlay for labels, pop-up text, the guide arrow and the joystick; `toScreen` projects through the 3D camera when 3D is on, and flying items are unprojected back into 3D.
-- Round 1 (done): ground/plaza/roads/sea/districts, store with shelves, upgrade tiles, zones, trees/maples (culled by distance, see-through when in front of the player), falling trees, people (player, customers, porter, tapper, villagers), bots/forklift/sapbot/vans/drone, warehouse + annex racks, pallets, conveyor, cash piles, flying items.
-- Later rounds: real interiors and machines for sawmill, shack, workshop, industry, rail, harbor and village (they are simple stand-ins now), phone performance pass, then make 3D the default.
+- The player tried a Three.js 3D view and asked to drop it: the game is 2D only. Don't bring 3D back unless asked.
 
 ## Maps and prestige
 
 - **Sell & Move** tile (`move` group, `P(-70, 520)`): after earning $250k on a map (`MOVE_MIN`, uses `stats.earned`), sell for a permanent income bonus (`moveGain()`: floor(sqrt(earned / 50k)) × 10%). The panel asks to confirm.
-- `MAPS`: Homestead → Snowy North (1.5× prices) → Tropical Coast (2× prices); after the last map, selling restarts it with more bonus. Each map changes item names (`ITEM_NAME`), some tile names, ground/plaza colors, 2D tree palettes (snow caps), and 3D tree shapes (`snowTrees`, `tropicTrees`). `applyMapTheme()` runs on load and on move; `R3.retheme()` rebuilds 3D trees and ground.
+- `MAPS`: Homestead → Snowy North (1.5× prices) → Tropical Coast (2× prices); after the last map, selling restarts it with more bonus. Same layout on every map; names and looks change. `applyMapTheme()` runs on load and on move.
+- Each map has a `look` (`LOOK()`: `farm` / `snow` / `tropic`) plus `sea`, `shore`, `rim` colors. The look drives:
+  - ground (`drawGround`): farm checkerboard; snow drifts, blue hollows and glints; tropic mown stripes with sand patches, and the world is an island in open sea
+  - plaza/road edges (snowbanks, sandy edge, dirt edge), owned-district tint
+  - sea (ice floes in the north, turquoise shallows in the tropics)
+  - decor (`drawSnowDecor`: dry tufts, snowy rocks, berry bushes, snowmen; `drawTropicDecor`: ferns, hibiscus, tiki torches)
+  - trees: snow mounds + birch bark marks; tropic bamboo clumps and teak (`tropicTree`), coconut palms (`drawPalm`)
+  - roofs (`roofDress`): snow + icicles; straw thatch on `THATCH` buildings in the tropics; house roofs too
+  - weather (`drawWeather`): falling snow; warm haze + drifting cloud shadows
+- `hash(i, j, k)` gives stable noise per grid cell so scenery doesn't move with the camera.
 - A move rebuilds the town from `FRESH` (a snapshot taken at startup), keeping finished Research levels, the Dispatch Office and its settings, and `prestige` {map, bonus, moves}. The bonus multiplies `incomeMul()`.
 - Ideas not built yet: a third/fourth map (desert, mountain valley), map-specific buildings or mechanics, a bigger map per move.
 
@@ -86,7 +91,7 @@ Never ship the debug handle.
 ## Open to-dos / ideas
 
 1. Balance pass: costs vs income without the test button (pacing for a real player).
-2. Phone performance check (large world, many draw calls).
+2. Phone performance check (large world, many draw calls; snow and cloud overlays add a little).
 3. Remove the test cash button for release.
 4. More van routes (e.g. paper → warehouse/dock, planks → workshop by van instead of flying).
 5. Ideas the player hasn't chosen yet:
