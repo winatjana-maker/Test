@@ -4,7 +4,8 @@ Read this first when picking the project back up.
 
 ## Where things live
 
-- **Playable game (published):** https://claude.ai/artifact/J1PmAqgWDPj7iC8bvr1dtQ
+- **Playable game (published):** https://claude.ai/artifact/2vhJNnKzrGBJ6igYbVcijo (new link since the 2D/art update; the old one, J1PmAqgWDPj7iC8bvr1dtQ, has the older 3D build)
+- **Always include the game link in every reply to the player** (they asked for this).
   Republish to the same URL by passing it as `url` to the Artifact tool.
   The artifact has `db` + `user` capabilities (account save); omit `capabilities` on republish to keep them.
 - **Source:** `homestead/src/head.html` (title, CSS, HUD markup) and `homestead/src/game.js` (all game code, inside `<script>`).
