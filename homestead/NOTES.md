@@ -39,9 +39,19 @@ Read this first when picking the project back up.
 - A move rebuilds the town from `FRESH` (a snapshot taken at startup), keeping finished Research levels, the Dispatch Office and its settings, and `prestige` {map, bonus, moves}. The bonus multiplies `incomeMul()`.
 - Ideas not built yet: a third/fourth map (desert, mountain valley), map-specific buildings or mechanics, a bigger map per move.
 
+## Art style (polished cartoon)
+
+- The player chose a polished-cartoon look and smooth play on phones over extra effects.
+- `OUT` + `outline()` draw the dark-brown outline; `shade(hex, k)` darkens/lightens (memoized).
+- Ground: `grassTex()`/`plazaTex()` are small painted textures per map. Grass, clumps, plaza and roads are painted once into cached screen tiles (`groundTile`, `paintGround`, `paintPlazas`, GT = 512) and copied each frame. Animated bits (sea, snow glints, waves) stay live. `clearGroundCache()` runs on resize and map change.
+- People: `personBody` draws the body; `personSprite` caches it per look + pose (rounded to 0.2) so crowds are cheap. Items carried (`before`) and tools (`after`) are still drawn live.
+- Trees: `crown()` gives leafy crowns one shared outline, shade and a highlight; conifers are outlined with a shaded right side.
+- Buildings: outlined walls/roofs, wall gradient, stone base, framed glass windows, roof gradient; store awning and counter outlined.
+- Perf check: CPU throttled 4× in Playwright at 400×760, DPR 2 — about 40 ms/frame, close to before the art pass.
+
 ## Game overview (current)
 
-2.5D canvas (TILT 0.52, ZOOM 0.75), world 4200×4200. The store is at the center (CX, CY); positions use `P(dx, dy)`.
+2.5D canvas (TILT 0.52, ZOOM 0.75; `ctx` is `let` because cached tiles/sprites swap it briefly), world 4200×4200. The store is at the center (CX, CY); positions use `P(dx, dy)`.
 
 - **Resources:** pine (`wood`), oak, redwood, maple sap → syrup, planks, chairs/tables, wood chips, water, paper, pellets, charcoal.
 - **Town:** store (2 lanes), restock zone, pallet yard → forklifts → warehouse + annex → conveyor to the shelves, tree yard, maple grove + sugar shack, sawmill (+ drying kiln), loading dock (truck orders), Head Office (sale multiplier), billboards, cash drone.
