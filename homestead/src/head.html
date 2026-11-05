@@ -48,6 +48,11 @@
     transition: transform .12s;
   }
   .chip.cash { color: var(--cash); }
+  .event-banner {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    color: #8a5a10; pointer-events: none; white-space: nowrap;
+  }
   .chip.pop { transform: scale(1.12); }
   .chip svg { width: 20px; height: 20px; flex: none; }
   .test-cash {
@@ -215,4 +220,9 @@
   <div id="panel-list"></div>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="chip event-banner" id="chip-event" title="Event on this map" hidden>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 L12.4 7.2 L18 7.8 L13.8 11.6 L15 17 L10 14.2 L5 17 L6.2 11.6 L2 7.8 L7.6 7.2 Z" fill="#e8b83a" stroke="#a57a1c" stroke-width="1"/></svg>
+    <span id="n-event"></span>
+  </div>
+
 <div class="hint" id="hint">Touch the bottom left to move · Chop trees · Restock · Grab the cash</div>

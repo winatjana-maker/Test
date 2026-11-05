@@ -40,6 +40,16 @@ Read this first when picking the project back up.
 - A move rebuilds the town from `FRESH` (a snapshot taken at startup), keeping finished Research levels, the Dispatch Office and its settings, and `prestige` {map, bonus, moves}. The bonus multiplies `incomeMul()`.
 - Ideas not built yet: a third/fourth map (desert, mountain valley), map-specific buildings or mechanics, a bigger map per move.
 
+## Map events, orchard and Market Hall
+
+- **Events** (`EVENTS`, `event`, `updateEvent`): one per map, every ~2.5–4 min once $300 is earned, ~45 s long, banner `#chip-event` at the bottom.
+  - Homestead: Market Day: store and market shoppers buy double and pay +25% (`shopMul()`); bunting over the plaza (`drawBunting`).
+  - Snowy North: Snowstorm: player speed ×0.7, logs & planks sell +50% (in `unitPrice`), heavy sideways snow.
+  - Tropical Coast: Tourist Boat: tourists (straw hats) pay +50%; a cruise ship in the NE sea (`drawTouristBoat`).
+- **Apple Orchard** district (south-west, `DISTRICTS.orchard`, tile `P(-1190, 990)`): `apple` nodes (`n.fruit` 0..1) from `ensureYard`. Walk within 100 of a ripe tree, or hire Pickers (`pickers`), and 3 apples fly to the Cider House (`PRESS`, roofed, `press` state) or, if it's full, to the Market's fruit crate (`appleDest`). Press: 2 apples → 1 cider; cider flies to the Market Hall.
+- **Market Hall** (`MARKET`, east edge of town, tile `P(700, 430)`, pile `market`): second shop selling cider + fresh apples (`mstock`), shoppers (`shoppers`, `updateMarket`) come from the south, line up at 1–3 slots and pay. Upgrades: `market`, `clerk`.
+- Per map: apples/cider are Cloudberries/Berry Jam (Jam Kitchen) up north and Oranges/Orange Juice (Juice Bar) on the coast (`names`, `ups`, `notes` in `MAPS`; `applyMapTheme` renames upgrades).
+
 ## Art style (polished cartoon)
 
 - The player chose a polished-cartoon look and smooth play on phones over extra effects.
