@@ -27,7 +27,8 @@ Read this first when picking the project back up.
 ## Maps and prestige
 
 - **Sell & Move** tile (`move` group, `P(-70, 520)`): after earning $250k on a map (`MOVE_MIN`, uses `stats.earned`), sell for a permanent income bonus (`moveGain()`: floor(sqrt(earned / 50k)) × 10%). The panel asks to confirm.
-- `MAPS`: Homestead → Snowy North (1.5× prices) → Tropical Coast (2× prices); after the last map, selling restarts it with more bonus. Same layout on every map; names and looks change. `applyMapTheme()` runs on load and on move.
+- `MAPS`: Homestead (1×) → Snowy North (1.5×) → Tropical Coast (2×) → Farm Valley (1.25×, `farmland: true`); after the last map, selling restarts it with more bonus. Indices are saved, so add new maps at the end.
+- **Map picker** (`#picker`, `openPicker`, `goMap`): all maps are open. It shows on a brand-new game and from the **Maps** button (bottom right). Every map keeps its own town: the current one is the normal save, the others live in `mapSaves` (saved as `others`). The income bonus in `prestige` is shared. Switching rebuilds trees with `makeNodes()`. Same layout on every map; names and looks change. `applyMapTheme()` runs on load and on move.
 - Each map has a `look` (`LOOK()`: `farm` / `snow` / `tropic`) plus `sea`, `shore`, `rim` colors. The look drives:
   - ground (`drawGround`): farm checkerboard; snow drifts, blue hollows and glints; tropic mown stripes with sand patches, and the world is an island in open sea
   - plaza/road edges (snowbanks, sandy edge, dirt edge), owned-district tint
@@ -37,7 +38,7 @@ Read this first when picking the project back up.
   - roofs (`roofDress`): snow + icicles; straw thatch on `THATCH` buildings in the tropics; house roofs too
   - weather (`drawWeather`): falling snow; warm haze + drifting cloud shadows
 - `hash(i, j, k)` gives stable noise per grid cell so scenery doesn't move with the camera.
-- A move rebuilds the town from `FRESH` (a snapshot taken at startup), keeping finished Research levels, the Dispatch Office and its settings, and `prestige` {map, bonus, moves}. The bonus multiplies `incomeMul()`.
+- Sell & Move wipes the current map's town and goes to the next map (its saved town if it has one, else a fresh one from `FRESH`, a deep copy taken at startup), keeping finished Research levels, the Dispatch Office and its settings, and `prestige` {map, bonus, moves}. The bonus multiplies `incomeMul()`.
 - Ideas not built yet: a third/fourth map (desert, mountain valley), map-specific buildings or mechanics, a bigger map per move.
 
 ## Map events, orchard and Market Hall
@@ -46,8 +47,9 @@ Read this first when picking the project back up.
   - Homestead: Market Day: store and market shoppers buy double and pay +25% (`shopMul()`); bunting over the plaza (`drawBunting`).
   - Snowy North: Snowstorm: player speed ×0.7, logs & planks sell +50% (in `unitPrice`), heavy sideways snow.
   - Tropical Coast: Tourist Boat: tourists (straw hats) pay +50%; a cruise ship in the NE sea (`drawTouristBoat`).
-- **Apple Orchard** district (south-west, `DISTRICTS.orchard`, tile `P(-1190, 990)`): `apple` nodes (`n.fruit` 0..1) from `ensureYard`. Walk within 100 of a ripe tree, or hire Pickers (`pickers`), and 3 apples fly to the Cider House (`PRESS`, roofed, `press` state) or, if it's full, to the Market's fruit crate (`appleDest`). Press: 2 apples → 1 cider; cider flies to the Market Hall.
+- **Apple Orchard** district (south-west, `DISTRICTS.orchard`, tile `P(-1190, 990)`): `apple` nodes (`n.fruit` 0..1) from `ensureYard`. Walk within 100 of a ripe tree and 3 apples go on your back (like logs). Carry them to a drop-off: the Cider House (`PRESS_IN`) or the Market (`MKT_IN`, west of the hall). Pickers (`pickers`) fill a basket of 8 and carry it to whichever drop-off is emptiest (`workerDrop`), so the market gets fresh fruit too. The store's Restock zone never takes crops (`CROPS`). Press: 2 apples → 1 cider; cider flies to the Market Hall.
 - **Market Hall** (`MARKET`, east edge of town, tile `P(700, 430)`, pile `market`): second shop selling cider + fresh apples (`mstock`), shoppers (`shoppers`, `updateMarket`) come from the south, line up at 1–3 slots and pay. Upgrades: `market`, `clerk`.
+- **Farm Valley only** (`FARMLAND()`; `DISTRICTS.fields`, group tile `P(1450, 1145)`, road with `farm: true`): Corn Farm (`fields`, `corn` nodes), Chicken Coop (`coop`, `hen` nodes that wander `HENYARD` and sit on a nest when an egg is ready), Grist Mill (`grist`, roofed, windmill sails: corn → cornmeal), Bakery (`bakery`, roofed: cornmeal + egg → cornbread, sent to the market), Farm Hands (`hands`). Carry corn to the mill (`GRIST_IN`) or market, eggs to the bakery (`BAKE_IN`) or market. On this map the Market sells cider, apples, corn, eggs and cornbread (`MKT_KINDS`) and opens with the orchard or the farm. On other maps the farm area is an empty clearing.
 - Per map: apples/cider are Cloudberries/Berry Jam (Jam Kitchen) up north and Oranges/Orange Juice (Juice Bar) on the coast (`names`, `ups`, `notes` in `MAPS`; `applyMapTheme` renames upgrades).
 
 ## Art style (polished cartoon)

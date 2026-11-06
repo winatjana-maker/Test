@@ -12,6 +12,7 @@
     --font-ui: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
     color-scheme: light;
   }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     background: var(--edge);
@@ -81,10 +82,40 @@
     border-radius: 999px;
     font-size: 14px;
     font-weight: 500;
-    max-width: calc(100% - 32px);
+    max-width: calc(100% - 200px);
     text-align: center;
     pointer-events: none;
     transition: opacity .6s;
+  }
+  /* map picker: a button bottom-right, and a full-screen chooser */
+  .maps-btn {
+    position: fixed; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    font: 600 15px var(--font-ui); color: var(--ink); background: var(--paper);
+    border: 0; border-radius: 12px; padding: 8px 14px; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.18);
+  }
+  .maps-btn:active { transform: translateY(2px); box-shadow: none; }
+  .maps-btn:focus-visible, .map-opt:focus-visible, .picker-close:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .picker { position: fixed; inset: 0; background: rgba(43,42,34,.55); display: grid; place-items: center; padding: 16px; z-index: 5; }
+  .picker-card {
+    background: var(--paper); border-radius: 18px; box-shadow: 0 6px 0 rgba(0,0,0,.2); padding: 16px;
+    width: 100%; max-width: 440px; max-height: calc(100vh - 32px); overflow-y: auto;
+  }
+  .picker-card h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+  .picker-card > p { margin: 0 0 12px; font-size: 14px; color: #5a5446; text-wrap: pretty; }
+  #picker-list { display: grid; gap: 8px; }
+  .map-opt {
+    display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: center; width: 100%; text-align: left;
+    font: inherit; color: inherit; background: #f3ead6; border: 2px solid transparent; border-radius: 14px; padding: 10px; cursor: pointer;
+  }
+  .map-opt.here { border-color: var(--cash); background: #eaf3df; }
+  .map-opt .sw { display: block; width: 46px; height: 46px; border-radius: 10px; box-shadow: inset 0 -6px 0 rgba(0,0,0,.15); }
+  .map-opt .mo { display: grid; gap: 2px; }
+  .map-opt b { font-size: 16px; font-weight: 600; }
+  .map-opt .mo span { font-size: 13px; color: #5a5446; line-height: 1.3; }
+  .map-opt em { font-style: normal; font-weight: 600; color: var(--cash); }
+  .picker-close {
+    margin-top: 12px; width: 100%; font: 600 15px var(--font-ui); background: var(--ink); color: var(--paper);
+    border: 0; border-radius: 12px; padding: 11px; cursor: pointer;
   }
   /* mini map, under the test button */
   .map {
@@ -211,6 +242,10 @@
     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6 H16 L14.5 17 H5.5 Z" fill="#9aa3ad"/><rect x="4.5" y="7" width="11" height="4" fill="#d79a2b"/><path d="M5 5 Q10 0 15 5" fill="none" stroke="#6b7480" stroke-width="1.4"/></svg>
     <span id="n-sap">0</span>
   </div>
+  <div class="chip" id="chip-crops" title="Fruit, corn and eggs carried" hidden>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 9 H17 L15 17 H5 Z" fill="#b5824a"/><circle cx="7.5" cy="7.5" r="3" fill="#d93b30"/><ellipse cx="12.8" cy="7.2" rx="2.6" ry="3.2" fill="#f7efe0" stroke="#c9b48a" stroke-width=".8"/><path d="M3 9 H17" stroke="#7a4f2c" stroke-width="1.6"/></svg>
+    <span id="n-crops">0</span>
+  </div>
 </div>
 <button class="test-cash" id="test-cash" type="button" title="Testing only: adds $100">+$100 test</button>
 <canvas class="map" id="map" title="Map: tap to make it bigger"></canvas>
@@ -225,4 +260,13 @@
     <span id="n-event"></span>
   </div>
 
+<button class="maps-btn" id="maps-btn" type="button">Maps</button>
+<div class="picker" id="picker" hidden>
+  <div class="picker-card" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <h2 id="picker-title">Choose your map</h2>
+    <p>Each map keeps its own town, cash and upgrades. Switch any time with the Maps button.</p>
+    <div id="picker-list"></div>
+    <button type="button" class="picker-close" id="picker-close">Close</button>
+  </div>
+</div>
 <div class="hint" id="hint">Touch the bottom left to move · Chop trees · Restock · Grab the cash</div>

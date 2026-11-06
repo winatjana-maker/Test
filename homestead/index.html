@@ -18,6 +18,7 @@
     --font-ui: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
     color-scheme: light;
   }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     background: var(--edge);
@@ -87,10 +88,40 @@
     border-radius: 999px;
     font-size: 14px;
     font-weight: 500;
-    max-width: calc(100% - 32px);
+    max-width: calc(100% - 200px);
     text-align: center;
     pointer-events: none;
     transition: opacity .6s;
+  }
+  /* map picker: a button bottom-right, and a full-screen chooser */
+  .maps-btn {
+    position: fixed; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    font: 600 15px var(--font-ui); color: var(--ink); background: var(--paper);
+    border: 0; border-radius: 12px; padding: 8px 14px; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.18);
+  }
+  .maps-btn:active { transform: translateY(2px); box-shadow: none; }
+  .maps-btn:focus-visible, .map-opt:focus-visible, .picker-close:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .picker { position: fixed; inset: 0; background: rgba(43,42,34,.55); display: grid; place-items: center; padding: 16px; z-index: 5; }
+  .picker-card {
+    background: var(--paper); border-radius: 18px; box-shadow: 0 6px 0 rgba(0,0,0,.2); padding: 16px;
+    width: 100%; max-width: 440px; max-height: calc(100vh - 32px); overflow-y: auto;
+  }
+  .picker-card h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+  .picker-card > p { margin: 0 0 12px; font-size: 14px; color: #5a5446; text-wrap: pretty; }
+  #picker-list { display: grid; gap: 8px; }
+  .map-opt {
+    display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: center; width: 100%; text-align: left;
+    font: inherit; color: inherit; background: #f3ead6; border: 2px solid transparent; border-radius: 14px; padding: 10px; cursor: pointer;
+  }
+  .map-opt.here { border-color: var(--cash); background: #eaf3df; }
+  .map-opt .sw { display: block; width: 46px; height: 46px; border-radius: 10px; box-shadow: inset 0 -6px 0 rgba(0,0,0,.15); }
+  .map-opt .mo { display: grid; gap: 2px; }
+  .map-opt b { font-size: 16px; font-weight: 600; }
+  .map-opt .mo span { font-size: 13px; color: #5a5446; line-height: 1.3; }
+  .map-opt em { font-style: normal; font-weight: 600; color: var(--cash); }
+  .picker-close {
+    margin-top: 12px; width: 100%; font: 600 15px var(--font-ui); background: var(--ink); color: var(--paper);
+    border: 0; border-radius: 12px; padding: 11px; cursor: pointer;
   }
   /* mini map, under the test button */
   .map {
@@ -217,6 +248,10 @@
     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6 H16 L14.5 17 H5.5 Z" fill="#9aa3ad"/><rect x="4.5" y="7" width="11" height="4" fill="#d79a2b"/><path d="M5 5 Q10 0 15 5" fill="none" stroke="#6b7480" stroke-width="1.4"/></svg>
     <span id="n-sap">0</span>
   </div>
+  <div class="chip" id="chip-crops" title="Fruit, corn and eggs carried" hidden>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 9 H17 L15 17 H5 Z" fill="#b5824a"/><circle cx="7.5" cy="7.5" r="3" fill="#d93b30"/><ellipse cx="12.8" cy="7.2" rx="2.6" ry="3.2" fill="#f7efe0" stroke="#c9b48a" stroke-width=".8"/><path d="M3 9 H17" stroke="#7a4f2c" stroke-width="1.6"/></svg>
+    <span id="n-crops">0</span>
+  </div>
 </div>
 <button class="test-cash" id="test-cash" type="button" title="Testing only: adds $100">+$100 test</button>
 <canvas class="map" id="map" title="Map: tap to make it bigger"></canvas>
@@ -231,6 +266,15 @@
     <span id="n-event"></span>
   </div>
 
+<button class="maps-btn" id="maps-btn" type="button">Maps</button>
+<div class="picker" id="picker" hidden>
+  <div class="picker-card" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <h2 id="picker-title">Choose your map</h2>
+    <p>Each map keeps its own town, cash and upgrades. Switch any time with the Maps button.</p>
+    <div id="picker-list"></div>
+    <button type="button" class="picker-close" id="picker-close">Close</button>
+  </div>
+</div>
 <div class="hint" id="hint">Touch the bottom left to move · Chop trees · Restock · Grab the cash</div>
 <script>
 (() => {
@@ -245,6 +289,7 @@
     logs: document.getElementById('n-logs'), sap: document.getElementById('n-sap'), cash: document.getElementById('n-cash'),
     event: document.getElementById('chip-event'), eventText: document.getElementById('n-event'),
     chipLogs: document.getElementById('chip-logs'), chipSap: document.getElementById('chip-sap'), chipCash: document.getElementById('chip-cash'),
+    crops: document.getElementById('n-crops'), chipCrops: document.getElementById('chip-crops'),
   };
   const FONT = 'Fredoka, "Trebuchet MS", sans-serif';
   // Testing aid: remove before release.
@@ -270,9 +315,10 @@
   };
   const LOGS = ['wood', 'oak', 'redwood'];
   const ITEM_NAME = { wood: 'Pine', oak: 'Oak', redwood: 'Redwood', plank: 'Planks', syrup: 'Syrup', sap: 'Sap', chair: 'Chairs', table: 'Tables',
-    chips: 'Wood chips', water: 'Water', paper: 'Paper', pellets: 'Pellets', charcoal: 'Charcoal', apple: 'Apples', cider: 'Cider' };
+    chips: 'Wood chips', water: 'Water', paper: 'Paper', pellets: 'Pellets', charcoal: 'Charcoal', apple: 'Apples', cider: 'Cider',
+    corn: 'Corn', egg: 'Eggs', meal: 'Cornmeal', bread: 'Cornbread' };
   const PLANKS_PER = { wood: 1, oak: 2, redwood: 4 };            // sawmill yield per log
-  const PRICE = { wood: 2, oak: 4, plank: 6, syrup: 12, redwood: 10, chair: 45, table: 90, paper: 15, pellets: 8, charcoal: 7, apple: 5, cider: 22 };
+  const PRICE = { wood: 2, oak: 4, plank: 6, syrup: 12, redwood: 10, chair: 45, table: 90, paper: 15, pellets: 8, charcoal: 7, apple: 5, cider: 22, corn: 4, egg: 6, bread: 30 };
   const SHOP = ['wood', 'oak', 'plank', 'syrup'];                 // what the counter sells, left to right
 
   // ---------- Layout (world units, relative to the store) ----------
@@ -312,6 +358,7 @@
     harbor: { name: 'Harbor', x0: CX + 700, x1: CX + 2080, y0: CY - 1860, y1: CY - 1300, ground: '#cdbb94' },
     village: { name: 'Pine Village', x0: CX - 2080, x1: CX - 1220, y0: CY - 1500, y1: CY - 620, ground: '#9fb87a' },
     orchard: { name: 'Apple Orchard', x0: CX - 2080, x1: CX - 1300, y0: CY + 620, y1: CY + 1460, ground: '#a3bf72' },
+    fields: { name: 'Corn Farm', x0: CX + 1560, x1: CX + 2080, y0: CY + 1180, y1: CY + 1960, ground: '#b9a868', farm: true },
   };
   // dirt roads through the forest to each district (trees never grow on them)
   const ROADS = [
@@ -323,6 +370,7 @@
     { x0: CX + 1000, x1: CX + 1120, y0: CY - 1300, y1: CY - 700 },
     { x0: CX - 1230, x1: CX - 1070, y0: CY - 700, y1: CY - 590 },
     { x0: CX - 1310, x1: CX - 1070, y0: CY + 930, y1: CY + 1050 },
+    { x0: CX + 1160, x1: CX + 1600, y0: CY + 1100, y1: CY + 1190, farm: true },
   ];
   const GEN = { x: CX + 420, front: CY + 1510, w: 190, d: 100 };
   const MILL = { x: CX + 760, front: CY + 1520, w: 230, d: 110 };
@@ -357,6 +405,18 @@
   // market hall: a second shop east of the store, with its own shoppers
   const MARKET = { x: CX + 990, front: CY + 500, w: 300, d: 90 };
   const MKT_SPAWN = P(1060, 1000);
+  // drop-off spots for fruit, corn and eggs you carry by hand
+  const MKT_IN = { ...P(795, 545), w: 90, d: 90 };
+  const PRESS_IN = { x: CX - 1560, y: CY + 1432, w: 120, d: 56 };
+  // farm (Farm Valley only, south-east): corn rows, a hen yard, a grist mill and a bakery
+  const GRIST = { x: CX + 1690, front: CY + 1330, w: 170, d: 100 };
+  const GRIST_IN = { x: CX + 1690, y: CY + 1364, w: 110, d: 56 };
+  const BAKERY = { x: CX + 1950, front: CY + 1330, w: 200, d: 90 };
+  const BAKE_IN = { x: CX + 1950, y: CY + 1364, w: 110, d: 56 };
+  const CORN = { x: CX + 1820, y: CY + 1565, cols: 8, rows: 5, gap: 54, rowGap: 56 };
+  const HENYARD = { x0: CX + 1600, x1: CX + 1860, y0: CY + 1745, y1: CY + 1940 };
+  const COOP = { x: CX + 1660, front: CY + 1790, w: 90, d: 50 };
+  const HANDS_HOME = P(1990, 1860);
 
   // ---------- Upgrades (pay by standing on the tile) ----------
   // Every upgrade belongs to a group. Each group has one tile on the ground; stand on it and its
@@ -443,6 +503,12 @@
     { id: 'pickers', group: 'orchard', name: 'Apple Pickers', hire: 'Hire a Picker', costs: [2500, 6000, 15000], note: '+1 worker who picks ripe apples', needs: 'orchard' },
     { id: 'market', group: 'market', name: 'Market Hall', hire: 'Build Market Hall', costs: [5000, 15000, 40000], note: 'Second shop: sells cider & fresh apples', more: 'Bigger shelves, more shoppers', needs: 'orchard' },
     { id: 'clerk', group: 'market', name: 'Market Clerk', hire: 'Hire a Clerk', costs: [2500, 8000, 20000], note: 'Serves shoppers faster', needs: 'market' },
+    // farm (Farm Valley only): corn and eggs, a grist mill and a bakery
+    { id: 'fields', group: 'fields', name: 'Corn Farm', hire: 'Buy the Farm', costs: [3000, 6000, 12000, 25000], note: 'Corn rows; walk past ripe corn to pick it', more: 'More corn, grows faster' },
+    { id: 'coop', group: 'fields', name: 'Chicken Coop', hire: 'Build Chicken Coop', costs: [2000, 5000, 12000, 30000], note: 'Hens lay eggs; walk past to collect them', more: 'More hens, lay faster', needs: 'fields' },
+    { id: 'grist', group: 'fields', name: 'Grist Mill', hire: 'Build Grist Mill', costs: [3000, 8000, 20000], note: 'Grinds corn into cornmeal', more: 'Grinds faster, holds more', needs: 'fields' },
+    { id: 'bakery', group: 'fields', name: 'Bakery', hire: 'Build Bakery', costs: [6000, 15000, 40000], note: 'Bakes cornmeal + an egg into cornbread', more: 'Bakes faster, holds more', needs: 'grist' },
+    { id: 'hands', group: 'fields', name: 'Farm Hands', hire: 'Hire a Farm Hand', costs: [2500, 6000, 15000], note: '+1 worker who picks corn & collects eggs', needs: 'fields' },
     { id: 'kilnfeed', group: 'industry', name: 'Oak Feeder', hire: 'Build Oak Feeder', costs: [4000, 12000, 30000], note: 'Kiln pulls oak straight from the warehouse', more: 'Feeds faster, holds more oak', needs: 'charcoal' },
   ];
   const GROUPS = [
@@ -464,6 +530,7 @@
     { id: 'village', name: 'Pine Village', ...P(-1000, -650) },
     { id: 'orchard', name: 'Apple Orchard', ...P(-1190, 990) },
     { id: 'market', name: 'Market Hall', ...P(700, 430) },
+    { id: 'fields', name: 'Corn Farm', farm: true, ...P(1450, 1145) },
     { id: 'move', name: 'Sell & Move', ...P(-70, 520) },
   ];
   const TILE_SIZE = 110;
@@ -506,7 +573,20 @@
       tree: { trunk: { pine: '#7fb04a', oak: '#7a3b28', redwood: '#8a5a32' }, oak: ['#245a2a', '#2f6b32', '#2a6330', '#3a7a3a', '#4f9142'],
         pine: ['#6aa843', '#7fb04a', '#94c45a'], redwood: ['#2d5a26', '#346430', '#3d6e2f', '#457836', '#4f823d'],
         maple: ['#3f8a33', '#4f9a3a', '#468f36', '#5aa646', '#6ab450'], mapleTrunk: '#a8834f' } },
+    { name: 'Farm Valley', price: 1.25, look: 'farm', farmland: true, sea: '#4f8fb3', shore: '#e3d3a5', rim: '#6a5236',
+      blurb: 'Golden fields: grow corn, collect eggs, grind meal and bake cornbread.',
+      names: {}, groups: {}, ground: ['#a3b85c', '#93a84e', '#667a36'], plaza: '#d3bb8c',
+      tree: { trunk: { pine: '#7a4f2c', oak: '#5e4129', redwood: '#9a4a2c' }, oak: ['#b8742c', '#c98436', '#c07a30', '#d99a45', '#ebb75e'],
+        pine: ['#3d7a3a', '#468a43', '#52994d'], redwood: ['#7a3f24', '#874a2a', '#955532', '#a3613a', '#b06e44'],
+        maple: ['#d9a03a', '#e6b243', '#dca83e', '#efc45a', '#f7d77a'], mapleTrunk: '#6e4a32' } },
   ];
+  const BLURBS = ['Green woods, maple syrup and an apple orchard.', 'Snowy forest, birch syrup and berry jam. Watch for snowstorms.',
+    'Sunny beaches, coconuts and orange juice. Tourist boats visit.'];
+  MAPS.forEach((m, i) => { m.blurb = m.blurb || BLURBS[i]; });
+  const FARMLAND = () => !!MAP().farmland;
+  const groupOn = g => !g.farm || FARMLAND();
+  const distOn = id => !DISTRICTS[id].farm || FARMLAND();
+  const roadsNow = () => ROADS.filter(r => !r.farm || FARMLAND());
   const prestige = { map: 0, bonus: 0, moves: 0 };
   const MAP = () => MAPS[prestige.map] || MAPS[0];
   const LOOK = () => MAP().look || 'farm';
@@ -563,6 +643,16 @@
   const mktCap = () => [0, 30, 60, 100][level.market];
   const mktShoppers = () => [0, 4, 6, 9][level.market];
   const clerkTime = () => [0.6, 0.4, 0.25, 0.15][level.clerk];
+  const cornSpots = () => [0, 16, 24, 32, 40][level.fields];
+  const cornTime = () => [26, 26, 21, 16, 12][level.fields];        // seconds for a stalk to ripen
+  const henCount = () => [0, 4, 6, 9, 12][level.coop];
+  const layTime = () => [36, 36, 28, 21, 15][level.coop];           // seconds between eggs
+  const gristCap = () => [0, 30, 50, 80][level.grist];
+  const gristTime = () => [2, 2, 1.4, 0.9][level.grist];
+  const bakeCap = () => [0, 30, 50, 80][level.bakery];
+  const bakeTime = () => [3, 3, 2, 1.3][level.bakery];
+  const MEAL_CAP = 40, BREAD_CAP = 40, CORN_PER = 2, EGGS_PER = 2, BAG = 8;
+  const CROPS = ['apple', 'corn', 'egg'];                           // carried by hand, never restocked at the store
   const reserveSpots = () => [0, 8, 16, 24, 32][level.reserve];
   const reserveGrow = () => [60, 60, 45, 30, 20][level.reserve];
   const workshopTime = () => [3, 3, 2, 1.2, 0.6][level.workshop];
@@ -605,15 +695,17 @@
   const cam = { x: 0, y: 0 };
 
   const player = { x: CX - 100, y: CY + 110, vx: 0, vy: 0, r: 16, face: 1, walk: 0, swing: 0 };
-  const carried = { wood: 0, oak: 0, redwood: 0, sap: 0 };
+  const carried = { wood: 0, oak: 0, redwood: 0, sap: 0, apple: 0, corn: 0, egg: 0 };
   const stock = { wood: 0, oak: 0, plank: 0, syrup: 0 };   // store shelves
   const wh = { wood: 0, oak: 0, redwood: 0 };              // warehouse racks
   const pallet = { wood: 0, oak: 0, redwood: 0 };
   const saw = { q: { wood: 0, oak: 0, redwood: 0 }, out: 0, t: 0, chips: 0 };
   const shack = { sap: 0, out: 0, t: 0, coal: 0, coalUse: 0 };
   const pileAmt = { store: 0, dock: 0, showroom: 0, rail: 0, harbor: 0, village: 0, market: 0 };
-  const press = { apples: 0, out: 0, t: 0 }, mstock = { cider: 0, apple: 0 }, mpend = { press: 0, cider: 0, apple: 0 };
-  let pickers = [], shoppers = [];
+  const press = { apples: 0, out: 0, t: 0 }, mstock = { cider: 0, apple: 0, corn: 0, egg: 0, bread: 0 };
+  const mpend = { press: 0, cider: 0, apple: 0, corn: 0, egg: 0, bread: 0, grist: 0, bmeal: 0, begg: 0 };
+  const grist = { corn: 0, meal: 0, t: 0 }, bakery = { meal: 0, eggs: 0, out: 0, t: 0 };
+  let pickers = [], shoppers = [], hands = [];
   // map events: market day (Homestead), snowstorm (Snowy North), tourist boat (Tropical Coast)
   const event = { kind: null, t: 0, next: 120 };
   const workshop = { planks: 0, chair: 0, table: 0, t: 0 };   // planks in, finished pieces waiting
@@ -796,6 +888,17 @@
       nodes.push({ type: 'apple', x: ORCHARD.x + (col - (ORCHARD.cols - 1) / 2) * ORCHARD.gap + (row % 2) * 24,
                    y: ORCHARD.y + (row - (ORCHARD.rows - 1) / 2) * 105, r: 16, fruit: (i % 4) / 4, size: 1, shake: 0, seed: i / 28 });
     }
+    const corn = nodes.filter(n => n.type === 'corn').length;
+    for (let i = corn; i < cornSpots(); i++) {
+      const row = Math.floor(i / CORN.cols), col = i % CORN.cols;
+      nodes.push({ type: 'corn', x: CORN.x + (col - (CORN.cols - 1) / 2) * CORN.gap + (row % 2) * 10, y: CORN.y + (row - (CORN.rows - 1) / 2) * CORN.rowGap,
+                   r: 10, fruit: (i % 5) / 5, size: 1, shake: 0, seed: (i * 0.618) % 1 });
+    }
+    const hens = nodes.filter(n => n.type === 'hen').length;
+    for (let i = hens; i < henCount(); i++) {
+      const hx = HENYARD.x0 + 40 + ((i * 53) % 150), hy = HENYARD.y0 + 70 + ((i * 37) % 90);
+      nodes.push({ type: 'hen', x: hx, y: hy, tx: hx, ty: hy, r: 10, fruit: (i % 3) / 3, size: 1, shake: 0, seed: (i * 0.37) % 1, face: 1, walk: 0, t: i });
+    }
   }
 
   // ---------- Customers ----------
@@ -886,7 +989,7 @@
     if (level.charcoal) boxes.push(KILN);
     // land you don't own yet is fenced off
     for (const id in DISTRICTS) {
-      if (level[id]) continue;
+      if (level[id] || !distOn(id)) continue;
       const d = DISTRICTS[id];
       boxes.push({ x: (d.x0 + d.x1) / 2, front: d.y1, w: d.x1 - d.x0, d: d.y1 - d.y0 });
     }
@@ -903,7 +1006,7 @@
 
   function collide() {
     for (const n of nodes) {
-      if (n.type === 'tree' && n.hp <= 0) continue;
+      if ((n.type === 'tree' && n.hp <= 0) || n.type === 'corn' || n.type === 'hen') continue;
       const dx = player.x - n.x, dy = player.y - n.y;
       const d = Math.hypot(dx, dy), min = n.r + player.r - 4;
       if (d < min && d > 0.001) {
@@ -1289,6 +1392,7 @@
   // Where a delivered piece goes:
   //   pine/oak → store shelf, then sawmill, then pallet.  redwood → sawmill, then pallet.  sap → sugar shack.
   function route(kind) {
+    if (CROPS.includes(kind)) return null;
     if (kind === 'sap') {
       if (level.shack && shack.sap + pending.shack < shackCap()) { pending.shack++; return 'shack'; }
       return null;
@@ -1335,7 +1439,7 @@
       timers.drop = 0.07;
       let i = stack.length - 1, dest = null;
       for (; i >= 0; i--) {
-        if (stack.slice(i + 1).includes(stack[i])) continue;   // already tried this kind
+        if (CROPS.includes(stack[i]) || stack.slice(i + 1).includes(stack[i])) continue;   // already tried this kind
         dest = route(stack[i]);
         if (dest) break;
       }
@@ -1343,7 +1447,7 @@
         const kind = stack[i];
         stack.splice(i, 1); carried[kind]--; updateHud();
         deliver(kind, dest, backTop());
-      } else fullNotice(stack[stack.length - 1]);
+      } else { const k = [...stack].reverse().find(x => !CROPS.includes(x)); if (k) fullNotice(k); }
     }
     timers.full -= dt;
 
@@ -1427,14 +1531,16 @@
     }
 
     // group tiles: stand on one to open its panel
-    const here = GROUPS.find(g => inRect(g, TILE_SIZE, TILE_SIZE));
+    const here = GROUPS.find(g => groupOn(g) && inRect(g, TILE_SIZE, TILE_SIZE));
     if ((here ? here.id : null) !== tileState.id) {
       tileState.id = here ? here.id : null;
       openPanel(here);
     }
   }
 
-  const canBuy = u => level[u.id] < u.costs.length && !(u.needs && !level[u.needs]) && !(u.research && research);
+  const needsMet = u => !u.needs || (Array.isArray(u.needs) ? u.needs.some(id => level[id]) : level[u.needs] > 0);
+  const needsName = u => (Array.isArray(u.needs) ? u.needs : [u.needs]).map(id => NAMES[id]).join(' or ');
+  const canBuy = u => level[u.id] < u.costs.length && needsMet(u) && !(u.research && research);
   function buy(id) {
     const u = UPGRADES.find(x => x.id === id);
     if (!u || !canBuy(u)) return;
@@ -1485,12 +1591,12 @@
     panelKey = key;
     const controls = panelGroup.id === 'dispatch' && level.dispatch ? dispatchControls() : panelGroup.id === 'move' ? moveControls() : '';
     ui.panelList.innerHTML = controls + items.map(u => {
-      const lv = level[u.id], max = lv >= u.costs.length, blocked = u.needs && !level[u.needs];
+      const lv = level[u.id], max = lv >= u.costs.length, blocked = !needsMet(u);
       const cost = u.costs[lv];
       const dots = u.costs.length > 1 ? `<span class="dots">${u.costs.map((_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>` : '';
       const title = max ? u.name : lv === 0 && u.hire ? u.hire : u.name;
       const busy = research && u.research;
-      const note = max ? 'Fully upgraded' : blocked ? `Needs ${NAMES[u.needs]}`
+      const note = max ? 'Fully upgraded' : blocked ? `Needs ${needsName(u)}`
         : busy && research.id === u.id ? `Researching… ${Math.ceil(research.total - research.t)}s left`
         : busy ? 'Lab is busy with another project' : upgradeNote(u, lv) + (u.research ? ` · takes ${u.research[lv]}s` : '');
       const btn = max ? '<span class="maxed">MAX</span>'
@@ -1541,6 +1647,26 @@
     return intro + `<div class="up"><div class="up-text"><div class="up-name">Sell & ${where}</div><div class="up-note">${g ? `${pct(g)} income forever` : `Earn $${MOVE_MIN.toLocaleString()} on this map first`}</div></div>` +
       `<button type="button" data-move="ask" ${g ? '' : 'disabled'}>Sell</button></div>`;
   }
+  // every map keeps its own town; the one you're on lives in the normal save, the rest in mapSaves
+  let mapSaves = {};
+  function resetTransient() {
+    fx.length = 0; belt = []; research = null; gather.node = null; moveAsk = false;
+    const zero = o => { for (const k in o) { if (typeof o[k] === 'number') o[k] = 0; else if (o[k] && typeof o[k] === 'object') zero(o[k]); } };
+    zero(pending); zero(pendingV); kilnPend = 0;
+    event.kind = null; event.next = 120;
+  }
+  const playedHere = () => stats.earned > 0 || UPGRADES.some(u => level[u.id] > 0);
+  function goMap(i, keepCur = true) {
+    if (!FRESH || i === prestige.map) return;
+    if (keepCur && playedHere()) { const cur = snapshot(); delete cur.others; mapSaves[prestige.map] = JSON.parse(JSON.stringify(cur)); }
+    const d = JSON.parse(JSON.stringify(mapSaves[i] || { ...FRESH, savedAt: Date.now() }));
+    delete mapSaves[i];
+    d.prestige = { ...prestige, map: i };
+    resetTransient();
+    applySave(d);
+    toast(`Welcome to ${MAP().name}!`);
+    save(true);
+  }
   function moveMap() {
     const g = moveGain();
     if (!g || !FRESH) return;
@@ -1548,15 +1674,39 @@
     for (const u of UPGRADES) if (u.research) d.level[u.id] = level[u.id];
     d.level.dispatch = level.dispatch;
     d.dispatch = JSON.parse(JSON.stringify(dispatch));
-    d.prestige = { map: Math.min(MAPS.length - 1, prestige.map + 1), bonus: Math.round((prestige.bonus + g) * 100) / 100, moves: prestige.moves + 1 };
-    d.savedAt = Date.now();
-    fx.length = 0; belt = []; research = null; gather.node = null; moveAsk = false;
-    const zero = o => { for (const k in o) { if (typeof o[k] === 'number') o[k] = 0; else if (o[k] && typeof o[k] === 'object') zero(o[k]); } };
-    zero(pending); zero(pendingV); kilnPend = 0;
-    applySave(d);
+    const cur = prestige.map, next = Math.min(MAPS.length - 1, cur + 1);
+    prestige.bonus = Math.round((prestige.bonus + g) * 100) / 100; prestige.moves++;
+    delete mapSaves[cur];                   // this town is sold: it starts over if you come back
+    if (next !== cur && mapSaves[next]) goMap(next, false);
+    else {
+      d.prestige = { ...prestige, map: next }; d.savedAt = Date.now();
+      resetTransient();
+      applySave(d);
+      save(true);
+    }
     toast(`Welcome to ${MAP().name}! Income bonus ${pct(prestige.bonus)}`);
-    save(true);
   }
+  // the map picker: shown on a brand-new game, and any time from the Maps button
+  const picker = document.getElementById('picker'), pickerList = document.getElementById('picker-list'), pickerClose = document.getElementById('picker-close');
+  function openPicker(first) {
+    pickerList.innerHTML = MAPS.map((m, i) => {
+      const here = i === prestige.map, sv = mapSaves[i];
+      const status = here ? (first ? 'Selected' : 'You are here') : sv ? `Your town · $${Math.floor((sv.stats && sv.stats.earned) || 0).toLocaleString()} earned` : 'New town';
+      return `<button type="button" class="map-opt${here ? ' here' : ''}" data-map="${i}">` +
+        `<i class="sw" style="background:linear-gradient(135deg, ${m.ground[0]} 0 50%, ${m.tree.oak[3]} 50% 72%, ${m.sea} 72%)"></i>` +
+        `<span class="mo"><b>${m.name}</b><span>${m.blurb}</span><span><em>${status}</em> · prices ×${m.price}</span></span></button>`;
+    }).join('');
+    pickerClose.textContent = first ? `Start on ${MAP().name}` : 'Close';
+    picker.hidden = false;
+  }
+  pickerList.addEventListener('click', e => {
+    const b = e.target.closest('[data-map]');
+    if (!b) return;
+    picker.hidden = true;
+    goMap(Number(b.dataset.map));
+  });
+  pickerClose.addEventListener('click', () => { picker.hidden = true; });
+  document.getElementById('maps-btn').addEventListener('click', () => openPicker(false));
   const BASE_NAMES = { ...ITEM_NAME }, BASE_GROUPS = Object.fromEntries(GROUPS.map(g => [g.id, g.name]));
   const BASE_UPS = Object.fromEntries(UPGRADES.map(u => [u.id, [u.name, u.hire, u.note]]));
   function applyMapTheme() {
@@ -1567,6 +1717,8 @@
       u.note = (m.notes || {})[u.id] || note;
       NAMES[u.id] = u.name;
     }
+    UPGRADES.find(u => u.id === 'market').needs = m.farmland ? ['orchard', 'fields'] : 'orchard';
+    UPGRADES.find(u => u.id === 'market').note = m.farmland ? 'Second shop: sells cider, fruit, corn, eggs & cornbread' : UPGRADES.find(u => u.id === 'market').note;
     Object.assign(ITEM_NAME, BASE_NAMES, m.names);
     for (const g of GROUPS) g.name = m.groups[g.id] || BASE_GROUPS[g.id];
     const root = document.documentElement.style;
@@ -2058,72 +2210,149 @@
   // ---------- Orchard, cider house and market hall ----------
   const pressInSpot = () => { const [x, y] = toScreen(PRESS.x - 60, PRESS.front); return [x, y - 24]; };
   const pressOutSpot = () => { const [x, y] = toScreen(PRESS.x + 60, PRESS.front); return [x, y - 24]; };
-  const mktSpot = kind => () => { const [x, y] = toScreen(MARKET.x + (kind === 'cider' ? -70 : 70), MARKET.front - 30); return [x, y - 40]; };
-  // where a picked apple goes: the cider house if it has room, otherwise the market's fresh-fruit crate
-  function appleDest() {
-    if (level.press && press.apples + mpend.press < pressCap()) return 'press';
-    if (level.market && mstock.apple + mpend.apple < mktCap()) return 'apple';
-    return null;
-  }
-  function pickTree(n, from) {
-    let sent = 0;
-    for (let k = 0; k < APPLES_PER_TREE; k++) {
-      const dest = appleDest();
-      if (!dest) break;
-      sent++;
-      if (dest === 'press') { mpend.press++; fly('apple', from, pressInSpot, 0.7 + k * 0.08, () => { mpend.press--; press.apples++; }); }
-      else { mpend.apple++; fly('apple', from, mktSpot('apple'), 1.1 + k * 0.08, () => { mpend.apple--; mstock.apple++; }); }
+  const mktSpot = kind => () => {
+    const ks = MKT_KINDS(), i = Math.max(0, ks.indexOf(kind)), w = MARKET.w / ks.length;
+    const [x, y] = toScreen(MARKET.x - MARKET.w / 2 + w * (i + 0.5), MARKET.front - 30); return [x, y - 40];
+  };
+  const gristInSpot = () => { const [x, y] = toScreen(GRIST.x - 50, GRIST.front); return [x, y - 24]; };
+  const gristOutSpot = () => { const [x, y] = toScreen(GRIST.x + 50, GRIST.front); return [x, y - 24]; };
+  const bakeInSpot = () => { const [x, y] = toScreen(BAKERY.x - 10, BAKERY.front); return [x, y - 30]; };
+  const bakeOutSpot = () => { const [x, y] = toScreen(BAKERY.x + 70, BAKERY.front); return [x, y - 24]; };
+  // what the Market Hall sells, left to right on its shelves
+  const MKT_KINDS = () => FARMLAND() ? ['cider', 'apple', 'corn', 'egg', 'bread'] : ['cider', 'apple'];
+  const MKT_WEIGHT = { cider: 2, apple: 1, corn: 1, egg: 1.2, bread: 2.5 };
+  const mktRoom = k => mstock[k] + mpend[k] < mktCap();
+  // drop-off spots: stand on one and what it takes comes off your back
+  const DROPS = [
+    { z: PRESS_IN, kinds: ['apple'], on: () => level.press > 0, fill: () => (press.apples + mpend.press) / pressCap(),
+      take: k => k === 'apple' && press.apples + mpend.press < pressCap(), send: () => { mpend.press++; return [pressInSpot, () => { mpend.press--; press.apples++; }]; } },
+    { z: MKT_IN, kinds: CROPS, on: () => level.market > 0, fill: k => (mstock[k] + mpend[k]) / mktCap(),
+      take: k => CROPS.includes(k) && MKT_KINDS().includes(k) && mktRoom(k), send: k => { mpend[k]++; return [mktSpot(k), () => { mpend[k]--; mstock[k]++; }]; } },
+    { z: GRIST_IN, kinds: ['corn'], on: () => level.grist > 0, fill: () => (grist.corn + mpend.grist) / gristCap(),
+      take: k => k === 'corn' && grist.corn + mpend.grist < gristCap(), send: () => { mpend.grist++; return [gristInSpot, () => { mpend.grist--; grist.corn++; }]; } },
+    { z: BAKE_IN, kinds: ['egg'], on: () => level.bakery > 0, fill: () => (bakery.eggs + mpend.begg) / bakeCap(),
+      take: k => k === 'egg' && bakery.eggs + mpend.begg < bakeCap(), send: () => { mpend.begg++; return [bakeInSpot, () => { mpend.begg--; bakery.eggs++; }]; } },
+  ];
+  // where a worker takes a crop: whichever open drop-off is emptiest, so the market gets fresh fruit too
+  function workerDrop(k) {
+    let best = null, bf = Infinity;
+    for (const D of DROPS) {
+      if (!D.on() || !D.take(k)) continue;
+      const f = D.fill(k);
+      if (f < bf) { bf = f; best = D; }
     }
-    if (sent) { n.fruit = 0; n.shake = 0.6; }
-    return sent;
+    return best;
   }
-  function updateOrchard(dt) {
-    if (!level.orchard) return;
-    // walk past a ripe tree and its fruit flies off to be pressed
+  const PICK_R = { apple: 100, corn: 70, hen: 80 };
+  const cropOf = n => n.type === 'hen' ? 'egg' : n.type;
+  const yieldOf = n => n.type === 'apple' ? APPLES_PER_TREE : n.type === 'corn' ? CORN_PER : EGGS_PER;
+  const cropTop = n => { const [x, y] = toScreen(n.x, n.y); return [x, y - (n.type === 'apple' ? 70 : n.type === 'corn' ? 46 : 14)]; };
+  function pickCrop(n, to, onEach) {
+    const k = cropOf(n), amt = yieldOf(n), from = cropTop(n);
+    n.fruit = 0; n.shake = 0.6;
+    for (let i = 0; i < amt; i++) fly(k, from, to, 0.35 + i * 0.06, onEach ? () => onEach(k) : null);
+    popText(n.x, n.y, n.type === 'apple' ? 100 : 56, `+${amt} ${ITEM_NAME[k]}`, '#ffe2b0');
+  }
+  // you: walk past ripe fruit, corn or a hen's nest and it goes on your back
+  function updateCrops(dt) {
     timers.pick = (timers.pick || 0) - dt;
     if (timers.pick <= 0) {
       timers.pick = 0.25;
       for (const n of nodes) {
-        if (n.type !== 'apple' || n.fruit < 1 || Math.hypot(n.x - player.x, n.y - player.y) > 100) continue;
-        if (pickTree(n, () => { const [x, y] = toScreen(n.x, n.y); return [x, y - 70]; })) break;
-        timers.full = (timers.full || 0) - 0.25;
-        if (timers.full <= 0) { timers.full = 3; popText(n.x, n.y, 110, level.press ? `${NAMES.press} is full!` : `Build the ${NAMES.press}`, '#ffd0c4'); }
+        if (!PICK_R[n.type] || n.fruit < 1 || Math.hypot(n.x - player.x, n.y - player.y) > PICK_R[n.type]) continue;
+        carried[cropOf(n)] += yieldOf(n); updateHud('crops');
+        pickCrop(n, backTop, k => stack.push(k));
         break;
       }
     }
-    // pickers
-    while (pickers.length < level.pickers) {
-      const i = pickers.length;
-      pickers.push({ i, x: PRESS.x - 160 + i * 40, y: PRESS.front + 50, state: 'idle', t: 0, walk: 0, face: 1, target: null });
+    timers.cropDrop = (timers.cropDrop || 0) - dt;
+    if (timers.cropDrop > 0 || !stack.length) return;
+    for (const D of DROPS) {
+      if (!D.on() || !inRect(D.z, D.z.w, D.z.d)) continue;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        const k = stack[i];
+        if (!CROPS.includes(k) || !D.take(k)) continue;
+        timers.cropDrop = 0.07;
+        stack.splice(i, 1); carried[k]--; updateHud();
+        const [to, done] = D.send(k);
+        fly(k, backTop(), to, 0.4, done);
+        return;
+      }
+      if (stack.some(k => D.kinds.includes(k)) && (timers.cropFull = (timers.cropFull || 0) - 0.07) <= 0) {
+        timers.cropFull = 2.5; popText(D.z.x, D.z.y, 40, 'Full!', '#ffd0c4');
+      }
     }
-    for (const h of pickers) {
+  }
+  // pickers and farm hands: fill a basket, carry it to a drop-off, unload, repeat
+  function updateWorkers(list, want, types, home, dt) {
+    while (list.length < want) {
+      const i = list.length;
+      list.push({ i, x: home.x - 60 + i * 40, y: home.y, state: 'idle', t: 0, walk: 0, face: 1, target: null, load: [], dest: null });
+    }
+    for (const h of list) {
       if (h.state === 'idle') {
         h.t -= dt;
         if (h.t > 0) continue;
         h.t = 0.5;
-        if (!appleDest()) continue;
+        if (h.load.length >= BAG) { h.state = 'drop'; continue; }
         let best = null, bd = Infinity;
         for (const n of nodes) {
-          if (n.type !== 'apple' || n.fruit < 1 || pickers.some(o => o !== h && o.target === n)) continue;
+          if (!types.includes(n.type) || n.fruit < 1 || !workerDrop(cropOf(n)) || list.some(o => o !== h && o.target === n)) continue;
           const d = Math.hypot(n.x - h.x, n.y - h.y);
           if (d < bd) { bd = d; best = n; }
         }
         if (best) { h.target = best; h.state = 'go'; }
+        else if (h.load.length) h.state = 'drop';
+        else h.state = 'home';
+      } else if (h.state === 'home') {
+        h.walk += dt * 9; h.face = home.x - 60 + h.i * 40 >= h.x ? 1 : -1;
+        if (moveEntity(h, home.x - 60 + h.i * 40, home.y, 150, dt) < 3) { h.walk = 0; h.state = 'idle'; h.t = 1; }
+        else if ((h.t -= dt) <= 0) { h.t = 0; h.state = 'idle'; }
       } else if (h.state === 'go') {
         const n = h.target;
         if (!n || n.fruit < 1) { h.state = 'idle'; h.target = null; continue; }
         const d = moveEntity(h, n.x + 22, n.y + 14, 170, dt);
         h.walk += dt * 9; h.face = n.x >= h.x ? 1 : -1;
-        if (d < 4) { h.state = 'pick'; h.t = 0.8; }
+        if (d < 4) { h.state = 'pick'; h.t = 0.7; }
       } else if (h.state === 'pick') {
         h.t -= dt; h.walk += dt * 14;
         if (h.t <= 0) {
           const n = h.target;
-          if (n && n.fruit >= 1) pickTree(n, () => { const [x, y] = toScreen(n.x, n.y); return [x, y - 70]; });
+          if (n && n.fruit >= 1) {
+            const k = cropOf(n), amt = yieldOf(n);
+            for (let i = 0; i < amt; i++) h.load.push(k);
+            pickCrop(n, () => { const [x, y] = toScreen(h.x, h.y); return [x - 15 * h.face, y - 26 - Math.min(h.load.length, 8) * 5]; }, null);
+          }
           h.target = null; h.state = 'idle'; h.t = 0.3; h.walk = 0;
         }
+      } else if (h.state === 'drop') {
+        if (!h.load.length) { h.state = 'idle'; h.dest = null; continue; }
+        if (!h.dest || !h.dest.on()) h.dest = h.load.map(workerDrop).find(Boolean) || null;
+        if (!h.dest) { h.t = 1; h.state = 'wait'; continue; }
+        const tx = h.dest.z.x - 30 + (h.i % 3) * 30, ty = h.dest.z.y;
+        h.walk += dt * 9; h.face = tx >= h.x ? 1 : -1;
+        if (moveEntity(h, tx, ty, 170, dt) < 4) { h.state = 'unload'; h.t = 0; h.walk = 0; }
+      } else if (h.state === 'unload') {
+        h.t -= dt;
+        if (h.t > 0) continue;
+        h.t = 0.12;
+        const D = h.dest, i = D ? h.load.findIndex(k => D.take(k)) : -1;
+        if (i < 0) { h.dest = null; h.state = h.load.length ? 'drop' : 'idle'; h.t = 0.3; continue; }
+        const k = h.load.splice(i, 1)[0], [to, done] = D.send(k);
+        const [x, y] = toScreen(h.x, h.y);
+        fly(k, [x - 15 * h.face, y - 30], to, 0.4, done);
+      } else if (h.state === 'wait') {
+        // nowhere has room: wait a moment, then look again
+        if ((h.t -= dt) <= 0) h.state = 'drop';
       }
     }
+  }
+  function updateOrchard(dt) {
+    updateCrops(dt);
+    if (level.orchard) updateWorkers(pickers, level.pickers, ['apple'], { x: PRESS.x - 100, y: PRESS.front + 60 }, dt);
+    if (FARMLAND() && level.fields) updateWorkers(hands, level.hands, ['corn', 'hen'], HANDS_HOME, dt);
+    updateFarm(dt);
+    if (!level.orchard) return;
     // the press: 2 apples → 1 cider, then cider rolls off to the market hall
     if (level.press) {
       if (press.apples >= 2 && press.out < PRESS_OUT_CAP) {
@@ -2134,6 +2363,31 @@
       if (level.market && press.out > 0 && timers.cider <= 0 && mstock.cider + mpend.cider < mktCap()) {
         timers.cider = 0.35; press.out--; mpend.cider++;
         fly('cider', pressOutSpot, mktSpot('cider'), 1.2, () => { mpend.cider--; mstock.cider++; }, 120);
+      }
+    }
+  }
+  // grist mill: corn → cornmeal, sent on to the bakery.  bakery: cornmeal + an egg → cornbread, sent to the market
+  function updateFarm(dt) {
+    if (level.grist) {
+      if (grist.corn > 0 && grist.meal < MEAL_CAP) {
+        grist.t += dt * boost();
+        if (grist.t >= gristTime()) { grist.t = 0; grist.corn--; grist.meal++; }
+      }
+      timers.meal = (timers.meal || 0) - dt;
+      if (level.bakery && grist.meal > 0 && timers.meal <= 0 && bakery.meal + mpend.bmeal < bakeCap()) {
+        timers.meal = 0.35; grist.meal--; mpend.bmeal++;
+        fly('meal', gristOutSpot, bakeInSpot, 1.3, () => { mpend.bmeal--; bakery.meal++; }, 120);
+      }
+    }
+    if (level.bakery) {
+      if (bakery.meal >= 1 && bakery.eggs >= 1 && bakery.out < BREAD_CAP) {
+        bakery.t += dt * boost();
+        if (bakery.t >= bakeTime()) { bakery.t = 0; bakery.meal--; bakery.eggs--; bakery.out++; }
+      }
+      timers.bread = (timers.bread || 0) - dt;
+      if (level.market && bakery.out > 0 && timers.bread <= 0 && mktRoom('bread')) {
+        timers.bread = 0.35; bakery.out--; mpend.bread++;
+        fly('bread', bakeOutSpot, mktSpot('bread'), 1.7, () => { mpend.bread--; mstock.bread++; }, 180);
       }
     }
   }
@@ -2164,7 +2418,7 @@
         const c = mktSlot(v.slot);
         v.walk += dt * 7;
         if (moveEntity(v, c.x, c.y, 120, dt) < 3) {
-          const opts = [['cider', 2], ['apple', 1]].filter(([k]) => mstock[k] > 0);
+          const opts = MKT_KINDS().filter(k => mstock[k] > 0).map(k => [k, MKT_WEIGHT[k]]);
           if (opts.length) { let r = Math.random() * opts.reduce((a, o) => a + o[1], 0); v.kind = opts.find(o => (r -= o[1]) < 0)[0]; }
           else v.kind = null;
           v.want = 1 + Math.floor(Math.random() * (2 + level.market * 2)) * (event.kind === 'market' ? 2 : 1);
@@ -2391,9 +2645,11 @@
   function updateHud(bump) {
     ui.logs.textContent = carried.wood + carried.oak + carried.redwood;
     ui.sap.textContent = carried.sap;
+    ui.crops.textContent = carried.apple + carried.corn + carried.egg;
+    ui.chipCrops.hidden = !(level.orchard || level.fields || carried.apple + carried.corn + carried.egg);
     ui.cash.textContent = '$' + cash;
     if (bump) {
-      const chip = { logs: ui.chipLogs, sap: ui.chipSap, cash: ui.chipCash }[bump];
+      const chip = { logs: ui.chipLogs, sap: ui.chipSap, cash: ui.chipCash, crops: ui.chipCrops }[bump];
       chip.classList.add('pop');
       setTimeout(() => chip.classList.remove('pop'), 120);
     }
@@ -2433,6 +2689,17 @@
       }
       if (node.type === 'maple' && node.sap < 1) node.sap = Math.min(1, node.sap + dt * rGrowth() / sapTime());
       else if (node.type === 'apple' && node.fruit < 1) node.fruit = Math.min(1, node.fruit + dt * rGrowth() / ripeTime());
+      else if (node.type === 'corn' && node.fruit < 1) node.fruit = Math.min(1, node.fruit + dt * rGrowth() / cornTime());
+      else if (node.type === 'hen') {
+        if (node.fruit < 1) node.fruit = Math.min(1, node.fruit + dt * rGrowth() / layTime());
+        // hens peck about the yard, and sit on the nest once an egg is ready
+        if (node.fruit < 1) {
+          node.t -= dt;
+          if (node.t <= 0) { node.t = 2 + Math.random() * 4; node.tx = HENYARD.x0 + 30 + Math.random() * (HENYARD.x1 - HENYARD.x0 - 60); node.ty = HENYARD.y0 + 65 + Math.random() * (HENYARD.y1 - HENYARD.y0 - 85); }
+          const dx = node.tx - node.x, dy = node.ty - node.y, d = Math.hypot(dx, dy);
+          if (d > 2) { const st = Math.min(d, 38 * dt); node.x += dx / d * st; node.y += dy / d * st; node.walk += dt * 12; if (Math.abs(dx) > 1) node.face = Math.sign(dx); }
+        }
+      }
     }
     updateStore(dt);
     updateSaw(dt);
@@ -2598,7 +2865,7 @@
   function paintPlazas() {
     const plazas = [[CX + 40, CY + 380, 2200, 1440, 30], [CX - 440, CY + 1180, 1280, 400, 30],
       [(ANNEX.x0 + ANNEX.x1) / 2 + 40, CY + 60, ANNEX.x1 - ANNEX.x0 + 160, 840, 30], [LEAVE_X, (CY + SPAWN_Y) / 2 + 80, 230, SPAWN_Y - CY + 160, 16],
-      ...ROADS.map(r => [(r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, r.x1 - r.x0, r.y1 - r.y0, 10])];
+      ...roadsNow().map(r => [(r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, r.x1 - r.x0, r.y1 - r.y0, 10])];
     const edge = { farm: ['rgba(90,70,48,.3)', 6], snow: ['#ffffff', 16], tropic: ['#c9ad6e', 7] }[LOOK()];
     ctx.strokeStyle = edge[0]; ctx.lineWidth = edge[1];
     for (const r of plazas) { groundRect(...r); ctx.stroke(); }
@@ -2660,7 +2927,7 @@
       }
     }
     drawTracks();
-    for (const id in DISTRICTS) drawDistrict(id);
+    for (const id in DISTRICTS) if (distOn(id)) drawDistrict(id);
 
     // tree yard and maple grove: tilled soil once built, a dashed plot before
     const yw = YARD.cols * YARD.gap + 60, yd = YARD.rows * 72 + 50;
@@ -2706,7 +2973,9 @@
     if (level.shack) zone(SHACK_IN, 'SUGAR SHACK', inRect(SHACK_IN, SHACK_IN.w, SHACK_IN.d) && stack.includes('sap'));
     else dashedPlot(SHACK.x, SHACK.front - SHACK.d / 2, SHACK.w, SHACK.d, 'Sugar Shack plot');
 
-    zone(DROP, 'RESTOCK', inRect(DROP, DROP.w, DROP.d) && stack.length);
+    zone(DROP, 'RESTOCK', inRect(DROP, DROP.w, DROP.d) && stack.some(k => !CROPS.includes(k)));
+    const zLabel = new Map([[PRESS_IN, NAMES.press.toUpperCase()], [MKT_IN, 'MARKET'], [GRIST_IN, 'GRIST MILL'], [BAKE_IN, 'BAKERY']]);
+    for (const D of DROPS) if (D.on()) zone(D.z, zLabel.get(D.z), inRect(D.z, D.z.w, D.z.d) && stack.some(k => D.kinds.includes(k)));
 
     if (level.conveyor) {
       const [bx0, by] = toScreen(BELT.x0, BELT.y), [bx1] = toScreen(BELT.x1, BELT.y);
@@ -2732,7 +3001,7 @@
       groundRect(BOT_HOME[id].x, BOT_HOME[id].y, id === 'truck' ? 90 : 56, 56, 8); ctx.fill();
     }
 
-    for (const g of GROUPS) drawGroupTile(g, time);
+    for (const g of GROUPS) if (groupOn(g)) drawGroupTile(g, time);
   }
 
   function drawDistrict(id) {
@@ -2761,6 +3030,20 @@
         ctx.fillStyle = 'rgba(110,80,40,.18)';
         for (let r = 0; r < ORCHARD.rows; r++) { groundRect(ORCHARD.x + 12, ORCHARD.y + (r - (ORCHARD.rows - 1) / 2) * 105 + 8, ORCHARD.cols * ORCHARD.gap + 40, 34, 14); ctx.fill(); }
         if (!level.press) dashedPlot(PRESS.x, PRESS.front - PRESS.d / 2, PRESS.w, PRESS.d, `${NAMES.press} plot`);
+      }
+      if (id === 'fields') {
+        ctx.fillStyle = 'rgba(110,70,30,.3)';
+        for (let r = 0; r < CORN.rows; r++) { groundRect(CORN.x + 5, CORN.y + (r - (CORN.rows - 1) / 2) * CORN.rowGap + 2, CORN.cols * CORN.gap + 30, 26, 10); ctx.fill(); }
+        // hen yard: straw on the ground and a low fence
+        const hx = (HENYARD.x0 + HENYARD.x1) / 2, hy = (HENYARD.y0 + HENYARD.y1) / 2, hw = HENYARD.x1 - HENYARD.x0, hd = HENYARD.y1 - HENYARD.y0;
+        ctx.fillStyle = 'rgba(226,196,120,.6)'; groundRect(hx, hy, hw, hd, 16); ctx.fill();
+        ctx.strokeStyle = '#8a6a43'; ctx.lineWidth = 2.5; groundRect(hx, hy, hw, hd, 6); ctx.stroke();
+        ctx.fillStyle = '#6b4c2e';
+        for (let x = HENYARD.x0; x <= HENYARD.x1; x += 35) for (const y of [HENYARD.y0, HENYARD.y1]) { const [px, py] = toScreen(x, y); ctx.fillRect(px - 2, py - 12, 4, 12); }
+        for (let y = HENYARD.y0; y <= HENYARD.y1; y += 35) for (const x of [HENYARD.x0, HENYARD.x1]) { const [px, py] = toScreen(x, y); ctx.fillRect(px - 2, py - 12, 4, 12); }
+        if (!level.coop) dashedPlot(COOP.x, COOP.front - COOP.d / 2, COOP.w + 30, COOP.d + 20, 'Coop plot');
+        if (!level.grist) dashedPlot(GRIST.x, GRIST.front - GRIST.d / 2, GRIST.w, GRIST.d, 'Grist Mill plot');
+        if (!level.bakery) dashedPlot(BAKERY.x, BAKERY.front - BAKERY.d / 2, BAKERY.w, BAKERY.d, 'Bakery plot');
       }
       if (id === 'east') {
         if (!level.workshop) dashedPlot(WORKSHOP.x, WORKSHOP.front - WORKSHOP.d / 2, WORKSHOP.w, WORKSHOP.d, 'Workshop plot');
@@ -3111,6 +3394,8 @@
     { key: 'lab', B: LAB, ids: ['lab'], wall: '#e9eef2', roof: '#5f6b7a', floor: '#d9dfe3', H: 74, door: 70, draw: () => drawLab(), top: labDish },
     { key: 'harbor', B: CUSTOMS, ids: ['harbor', 'cranes', 'shipping'], wall: '#3d6fa8', roof: '#2b3a4a', floor: '#c3b598', H: 70, arched: true, draw: () => drawCustoms() },
     { key: 'vstore', B: VSTORE, ids: ['vstore'], wall: '#e9d8b4', roof: '#8a3b2e', floor: '#b49a74', H: 70, door: 80, draw: () => drawVStore() },
+    { key: 'grist', B: GRIST, ids: ['grist'], wall: '#d9c9a5', roof: '#7a5a3a', floor: '#a98a62', H: 70, door: 70, draw: () => drawGristMill(), top: gristSails },
+    { key: 'bakery', B: BAKERY, ids: ['bakery'], wall: '#e9d8b4', roof: '#a5483a', floor: '#c9b48a', H: 66, door: 70, draw: () => drawBakeryIn(), top: bakeChimney },
     { key: 'press', B: PRESS, ids: ['press'], wall: '#b5763c', roof: '#7a3428', floor: '#a98a62', H: 70, door: 70, draw: () => drawPress(), top: pressChimney },
     { key: 'rail', B: STATION, ids: ['rail'], wall: '#c4703f', roof: '#7a3428', floor: '#b8a588', H: 80, door: 80, arched: true, draw: () => drawStation(), top: stationClock },
   ];
@@ -4121,7 +4406,7 @@
   function drawWater(x, y) {
     ctx.fillStyle = '#5a8fb0'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
   }
-  const ITEM_DRAW = { apple: drawAppleItem, cider: drawCiderItem, wood: drawLog, oak: drawOak, redwood: drawRedwood, plank: drawPlank, sap: drawSap, syrup: drawSyrup, cash: drawBill, chair: drawChair, table: drawTable,
+  const ITEM_DRAW = { apple: drawAppleItem, cider: drawCiderItem, corn: drawCornItem, egg: drawEggItem, meal: drawMealItem, bread: drawBreadItem, wood: drawLog, oak: drawOak, redwood: drawRedwood, plank: drawPlank, sap: drawSap, syrup: drawSyrup, cash: drawBill, chair: drawChair, table: drawTable,
     chips: drawChips, paper: drawPaper, pellets: drawPellets, charcoal: drawCharcoal, water: drawWater };
   const drawItem = (kind, x, y) => (ITEM_DRAW[kind] || drawBill)(x, y);
 
@@ -4183,6 +4468,135 @@
       ctx.beginPath(); ctx.arc(sx, sy - (look === 'snow' ? 56 : 104), 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * n.fruit); ctx.stroke();
     }
   }
+  function drawCornItem(x, y) {
+    ctx.fillStyle = '#f2c94c'; ctx.beginPath(); ctx.ellipse(x, y - 5, 3.4, 6.4, 0.35, 0, Math.PI * 2); ctx.fill(); outline(1.1);
+    ctx.fillStyle = 'rgba(170,120,30,.45)'; ctx.fillRect(x - 0.6, y - 10, 1.2, 9);
+    ctx.fillStyle = '#6aa843'; ctx.beginPath(); ctx.moveTo(x - 1, y + 2); ctx.quadraticCurveTo(x + 7, y - 1, x + 6, y - 10); ctx.quadraticCurveTo(x + 3, y - 3, x - 3, y); ctx.closePath(); ctx.fill();
+  }
+  function drawEggItem(x, y) {
+    ctx.fillStyle = '#f7efe0'; ctx.beginPath(); ctx.ellipse(x, y - 4, 3.6, 4.7, 0, 0, Math.PI * 2); ctx.fill(); outline(1);
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(x - 2, y - 7, 1.4, 1.6);
+  }
+  function drawMealItem(x, y) {
+    ctx.fillStyle = '#eadbb2'; roundRect(x - 5, y - 10, 10, 12, 3); ctx.fill(); outline(1.1);
+    ctx.fillStyle = '#c9a35a'; ctx.fillRect(x - 5, y - 10, 10, 2.5);
+    ctx.fillStyle = '#e8b83a'; ctx.beginPath(); ctx.arc(x, y - 3.5, 1.9, 0, Math.PI * 2); ctx.fill();
+  }
+  function drawBreadItem(x, y) {
+    ctx.fillStyle = '#e0a23a'; roundRect(x - 6, y - 8, 12, 9, 3.5); ctx.fill(); outline(1.1);
+    ctx.fillStyle = '#f2c46a'; ctx.fillRect(x - 4.5, y - 7, 9, 2);
+    ctx.strokeStyle = 'rgba(120,70,20,.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); for (const dx of [-2.5, 0.5, 3.5]) { ctx.moveTo(x + dx, y - 6.5); ctx.lineTo(x + dx - 1.5, y - 1.5); } ctx.stroke();
+  }
+  function drawCorn(n) {
+    const [sx, sy] = toScreen(n.x, n.y), ripe = n.fruit >= 1, h = 16 + Math.min(1, n.fruit) * 36;
+    const wob = Math.sin(n.shake * 30) * n.shake * 3 + Math.sin(performance.now() / 900 + n.seed * 9) * 1.2;
+    ctx.fillStyle = 'rgba(30,40,20,.14)'; ctx.beginPath(); ctx.ellipse(sx + 3, sy + 1, 12, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = ripe ? '#8f9a3a' : '#4f8f36'; ctx.lineWidth = 3.2;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(sx + wob * 0.5, sy - h * 0.5, sx + wob, sy - h); ctx.stroke();
+    ctx.fillStyle = ripe ? '#a3b04a' : '#62ad48';
+    for (const [t, dir] of [[0.28, -1], [0.48, 1], [0.68, -1], [0.85, 1]]) {
+      if (t * h < 9) continue;
+      const lx = sx + wob * t, ly = sy - h * t;
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.quadraticCurveTo(lx + dir * 12, ly - 9, lx + dir * 17, ly + 1); ctx.quadraticCurveTo(lx + dir * 8, ly - 2, lx, ly + 3); ctx.closePath(); ctx.fill();
+    }
+    if (ripe) {   // a fat cob and a golden tassel
+      ctx.fillStyle = '#f2c94c'; ctx.beginPath(); ctx.ellipse(sx + wob * 0.6 + 5, sy - h * 0.58, 3.8, 8.5, 0.35, 0, Math.PI * 2); ctx.fill(); outline(1);
+      ctx.fillStyle = '#7fb04a'; ctx.beginPath(); ctx.moveTo(sx + wob * 0.6 + 1, sy - h * 0.46); ctx.quadraticCurveTo(sx + wob * 0.6 + 10, sy - h * 0.5, sx + wob * 0.6 + 9, sy - h * 0.72); ctx.quadraticCurveTo(sx + wob * 0.6 + 4, sy - h * 0.55, sx + wob * 0.6 + 1, sy - h * 0.46); ctx.fill();
+      ctx.strokeStyle = '#e8c65a'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); for (const a of [-0.6, 0, 0.6]) { ctx.moveTo(sx + wob, sy - h); ctx.lineTo(sx + wob + Math.sin(a) * 7, sy - h - 8); } ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+  function drawHen(n) {
+    const [sx, sy] = toScreen(n.x, n.y), sit = n.fruit >= 1, f = n.face || 1, bob = sit ? 0 : Math.abs(Math.sin(n.walk || 0)) * 2;
+    ctx.fillStyle = 'rgba(30,40,20,.16)'; ctx.beginPath(); ctx.ellipse(sx, sy + 1, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+    if (sit) {   // straw nest with eggs peeking out
+      ctx.fillStyle = '#d9b45a'; ctx.beginPath(); ctx.ellipse(sx, sy - 2, 15, 6, 0, 0, Math.PI * 2); ctx.fill(); outline(1.2);
+      drawEggItem(sx - 9, sy + 1); drawEggItem(sx + 10, sy + 1);
+    } else {
+      ctx.strokeStyle = '#d98a2a'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(sx - 2, sy - 7); ctx.lineTo(sx - 3, sy); ctx.moveTo(sx + 2, sy - 7); ctx.lineTo(sx + 3, sy); ctx.stroke();
+    }
+    const body = n.seed < 0.5 ? '#fbf6ec' : '#b5652e';
+    ctx.save(); ctx.translate(sx, sy - (sit ? 9 : 13) - bob); ctx.scale(f, 1);
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.moveTo(-8, -2); ctx.lineTo(-14, -10); ctx.lineTo(-5, -6); ctx.closePath(); ctx.fill(); outline(1.1);
+    ctx.beginPath(); ctx.ellipse(0, 0, 10, 7, 0, 0, Math.PI * 2); ctx.fill(); outline(1.3);
+    ctx.beginPath(); ctx.arc(8, -7, 4.6, 0, Math.PI * 2); ctx.fill(); outline(1.2);
+    ctx.fillStyle = shade(body, -0.12); ctx.beginPath(); ctx.ellipse(-1, 0, 5, 3.5, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d9382b'; ctx.beginPath(); ctx.arc(7.5, -12, 2.2, 0, Math.PI * 2); ctx.arc(10, -11.2, 1.7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e8a23a'; ctx.beginPath(); ctx.moveTo(12, -8); ctx.lineTo(16, -6.5); ctx.lineTo(12, -5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2b2a22'; ctx.fillRect(9, -8.6, 1.6, 1.6);
+    ctx.restore();
+  }
+  function drawCoop() {
+    const B = COOP, [sx, sy] = toScreen(B.x, B.front), hw = B.w / 2, H = 46, base = sy - 14;
+    ctx.fillStyle = 'rgba(30,40,20,.14)'; roundRect(sx - hw - 6, sy - 10, B.w + 18, 16, 8); ctx.fill();
+    ctx.fillStyle = '#6e4a32'; ctx.fillRect(sx - hw + 6, base, 6, 14); ctx.fillRect(sx + hw - 12, base, 6, 14);
+    ctx.fillStyle = '#c4472b'; ctx.fillRect(sx - hw, base - H, B.w, H);
+    ctx.fillStyle = 'rgba(0,0,0,.09)'; for (let x = sx - hw + 9; x < sx + hw; x += 10) ctx.fillRect(x, base - H, 1.5, H);
+    ctx.beginPath(); ctx.rect(sx - hw, base - H, B.w, H); outline(2);
+    ctx.fillStyle = '#fffaf0'; ctx.fillRect(sx - hw, base - 4, B.w, 4);
+    ctx.fillStyle = '#5f646c'; ctx.beginPath(); ctx.moveTo(sx - hw - 8, base - H + 2); ctx.lineTo(sx, base - H - 30); ctx.lineTo(sx + hw + 8, base - H + 2); ctx.closePath(); ctx.fill(); outline(2);
+    if (LOOK() === 'snow') { ctx.fillStyle = '#f6f9fb'; ctx.beginPath(); ctx.moveTo(sx - hw - 4, base - H - 2); ctx.lineTo(sx, base - H - 30); ctx.lineTo(sx + hw + 4, base - H - 2); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = '#3a2618'; roundRect(sx - 9, base - 26, 18, 26, 8); ctx.fill();
+    ctx.fillStyle = '#fff3a6'; ctx.fillRect(sx + 16, base - H + 10, 13, 11); ctx.beginPath(); ctx.rect(sx + 16, base - H + 10, 13, 11); outline(1.4);
+    ctx.strokeStyle = '#a0703f'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(sx, base); ctx.lineTo(sx + 16, sy + 8); ctx.stroke();
+    ctx.strokeStyle = 'rgba(60,40,20,.5)'; ctx.lineWidth = 1; ctx.beginPath(); for (let k = 1; k < 4; k++) { ctx.moveTo(sx + k * 4 - 3, base + k * 5.5 - 2); ctx.lineTo(sx + k * 4 + 3, base + k * 5.5 - 4); } ctx.stroke();
+  }
+  function drawGristMill() {
+    const [sx, sy] = toScreen(GRIST.x, GRIST.front), back = GRIST.d * TILT, busy = grist.corn > 0 && grist.meal < MEAL_CAP;
+    ctx.fillStyle = '#8a5a2e'; roundRect(sx - 76, sy - back * 0.55 - 6, 44, 24, 4); ctx.fill(); outline(1.4);
+    for (let i = 0; i < Math.min(grist.corn, 12); i++) drawCornItem(sx - 69 + (i % 4) * 9, sy - back * 0.55 - 2 - Math.floor(i / 4) * 6);
+    const turn = busy ? performance.now() / 400 : 0, my = sy - back * 0.5;
+    ctx.fillStyle = '#8f8b80'; ctx.beginPath(); ctx.ellipse(sx - 4, my - 6, 26, 11, 0, 0, Math.PI * 2); ctx.fill(); outline(1.6);
+    ctx.fillStyle = '#b9b4a8'; ctx.beginPath(); ctx.ellipse(sx - 4, my - 15, 24, 10, 0, 0, Math.PI * 2); ctx.fill(); outline(1.6);
+    ctx.strokeStyle = 'rgba(60,60,60,.45)'; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let k = 0; k < 4; k++) { const a = turn + k * Math.PI / 2; ctx.moveTo(sx - 4, my - 15); ctx.lineTo(sx - 4 + Math.cos(a) * 21, my - 15 + Math.sin(a) * 8.5); }
+    ctx.stroke();
+    worker(sx + 30, my, '#3d7cc9', busy, '#6b4127');
+    for (let i = 0; i < Math.min(grist.meal, 8); i++) drawMealItem(sx + 46 + (i % 4) * 10, sy - 8 - Math.floor(i / 4) * 13);
+    tag(`${grist.corn} ${ITEM_NAME.corn.toLowerCase()} → ${grist.meal} ${ITEM_NAME.meal.toLowerCase()}`, sx, sy - back - 132, 13, '#fffaf0');
+  }
+  function gristSails(sx, sy, back, H) {
+    const a = grist.corn > 0 && grist.meal < MEAL_CAP ? performance.now() / 700 : 0.4, cy = sy - back - H - 22;
+    ctx.fillStyle = '#7a4f2c'; ctx.fillRect(sx - 5, cy, 10, 22);
+    for (let k = 0; k < 4; k++) {
+      ctx.save(); ctx.translate(sx, cy); ctx.rotate(a + k * Math.PI / 2);
+      ctx.fillStyle = '#6e4a32'; ctx.fillRect(-2, -62, 4, 62);
+      ctx.fillStyle = '#efe2c4'; ctx.beginPath(); ctx.rect(2, -60, 14, 44); ctx.fill(); outline(1.3);
+      ctx.strokeStyle = 'rgba(110,80,40,.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); for (let y = -52; y < -16; y += 9) { ctx.moveTo(2, y); ctx.lineTo(16, y); } ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#5f646c'; ctx.beginPath(); ctx.arc(sx, cy, 6, 0, Math.PI * 2); ctx.fill(); outline(1.4);
+  }
+  function drawBakeryIn() {
+    const [sx, sy] = toScreen(BAKERY.x, BAKERY.front), back = BAKERY.d * TILT, oy = sy - back * 0.5;
+    const busy = bakery.meal >= 1 && bakery.eggs >= 1 && bakery.out < BREAD_CAP;
+    // brick oven with a fire when it's baking
+    ctx.fillStyle = '#b5583a';
+    ctx.beginPath(); ctx.moveTo(sx - 92, oy); ctx.lineTo(sx - 92, oy - 26); ctx.arc(sx - 64, oy - 26, 28, Math.PI, 0); ctx.lineTo(sx - 36, oy); ctx.closePath(); ctx.fill(); outline(1.8);
+    ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1; ctx.beginPath(); for (let y = oy - 8; y > oy - 44; y -= 9) { ctx.moveTo(sx - 90, y); ctx.lineTo(sx - 38, y); } ctx.stroke();
+    ctx.fillStyle = busy ? `rgb(255,${150 + Math.round(Math.sin(performance.now() / 120) * 40)},60)` : '#3a2618';
+    ctx.beginPath(); ctx.moveTo(sx - 76, oy - 2); ctx.lineTo(sx - 76, oy - 12); ctx.arc(sx - 64, oy - 12, 12, Math.PI, 0); ctx.lineTo(sx - 52, oy - 2); ctx.closePath(); ctx.fill();
+    // eggs and cornmeal waiting
+    ctx.fillStyle = '#a0703f'; roundRect(sx - 26, oy - 8, 34, 14, 5); ctx.fill(); outline(1.3);
+    for (let i = 0; i < Math.min(bakery.eggs, 8); i++) drawEggItem(sx - 21 + (i % 4) * 8, oy - 4 - Math.floor(i / 4) * 5);
+    for (let i = 0; i < Math.min(bakery.meal, 6); i++) drawMealItem(sx + 16 + (i % 3) * 10, oy - Math.floor(i / 3) * 12);
+    worker(sx - 2, oy + 10, '#fffaf0', busy, '#8d5a3b');
+    // cooling rack of cornbread
+    ctx.fillStyle = '#8a5a2e'; ctx.fillRect(sx + 42, sy - 30, 52, 4); ctx.fillRect(sx + 42, sy - 14, 52, 4);
+    ctx.fillRect(sx + 42, sy - 34, 3, 30); ctx.fillRect(sx + 91, sy - 34, 3, 30);
+    for (let i = 0; i < Math.min(bakery.out, 8); i++) drawBreadItem(sx + 50 + (i % 4) * 12, sy - 31 + Math.floor(i / 4) * 16);
+    tag(`${bakery.meal} ${ITEM_NAME.meal.toLowerCase()} + ${bakery.eggs} ${ITEM_NAME.egg.toLowerCase()} → ${bakery.out} ${ITEM_NAME.bread.toLowerCase()}`, sx, sy - back - 86, 13, '#fffaf0');
+  }
+  function bakeChimney(sx, sy, back, H) {
+    ctx.fillStyle = '#9a4a32'; ctx.fillRect(sx - 72, sy - back - H - 34, 16, 30);
+    if (bakery.meal >= 1 && bakery.eggs >= 1) smoke(sx - 64, sy - back - H - 38, 'rgba(255,255,255,', 2);
+  }
   function pressChimney(sx, sy, back, H) {
     ctx.fillStyle = '#7a4a32'; ctx.fillRect(sx + 60, sy - back - H - 34, 16, 30);
     if (press.apples >= 2) smoke(sx + 68, sy - back - H - 38, 'rgba(255,255,255,', 2);
@@ -4206,10 +4620,14 @@
     for (let i = 0; i < Math.min(press.out, 12); i++) drawCiderItem(sx + 70 + (i % 6) * 8, sy - 8 - Math.floor(i / 6) * 13);
     tag(`${press.apples} ${ITEM_NAME.apple.toLowerCase()} → ${press.out} ${ITEM_NAME.cider.toLowerCase()}`, sx, sy - back - 86, 13, '#fffaf0');
   }
-  function drawPicker(h) {
+  function drawPicker(h, farmHand) {
     const [sx, sy] = toScreen(h.x, h.y);
-    drawPerson(sx, sy, { walk: h.walk, face: h.face, shirt: '#5a9642', skin: ['#8d5a3b', '#c68e62', '#6b4127'][h.i % 3], hair: '#16120f', hat: '#c9a35a', pants: '#3d5a8a',
-      arms: h.state === 'pick' ? 'work' : true, before: () => { ctx.fillStyle = '#a0703f'; roundRect(-16, -26, 10, 9, 2); ctx.fill(); } });
+    drawPerson(sx, sy, { walk: h.walk, face: h.face, shirt: farmHand ? '#c9a35a' : '#5a9642', skin: ['#8d5a3b', '#c68e62', '#6b4127'][h.i % 3], hair: '#16120f',
+      hat: farmHand ? '#e8cf7a' : '#c9a35a', pants: farmHand ? '#5a4630' : '#3d5a8a',
+      arms: h.state === 'pick' ? 'work' : true, before: () => {
+        ctx.fillStyle = '#a0703f'; roundRect(-20, -26, 12, 9, 2); ctx.fill();
+        for (let i = 0; i < Math.min(h.load.length, 8); i++) drawItem(h.load[i], -14, -26 - i * 5);
+      } });
   }
   function drawShopper(v) {
     const [sx, sy] = toScreen(v.x, v.y);
@@ -4227,8 +4645,11 @@
       ctx.fillStyle = '#efe2c4'; ctx.fillRect(sx - hw, sy - back - 70, B.w, 70);
       ctx.beginPath(); ctx.rect(sx - hw, sy - back - 70, B.w, 70); outline(2);
       ctx.fillStyle = '#8a6a43'; ctx.fillRect(sx - hw + 10, sy - back - 40, B.w - 20, 4); ctx.fillRect(sx - hw + 10, sy - back - 14, B.w - 20, 4);
-      for (let i = 0; i < Math.min(mstock.cider, 24); i++) drawCiderItem(sx - hw + 22 + (i % 12) * 10, sy - back - 42 + Math.floor(i / 12) * 26);
-      for (let i = 0; i < Math.min(mstock.apple, 24); i++) drawAppleItem(sx + 22 + (i % 12) * 10, sy - back - 42 + Math.floor(i / 12) * 26);
+      const ks = MKT_KINDS(), secW = B.w / ks.length, per = Math.max(3, Math.floor((secW - 14) / 10));
+      ks.forEach((k, j) => {
+        const x0 = sx - hw + j * secW + 12;
+        for (let i = 0; i < Math.min(mstock[k], per * 2); i++) drawItem(k, x0 + (i % per) * 10, sy - back - 42 + Math.floor(i / per) * 26);
+      });
       // clerk
       worker(sx + 0, sy - 22, '#2f9d8f', shoppers.some(v => v.state === 'buy'), '#c68e62');
       // counter with crates
@@ -4248,7 +4669,7 @@
       const name = 'MARKET HALL', sw = ctx.measureText(name).width + 30;
       ctx.fillStyle = '#2f5a2c'; roundRect(sx - sw / 2, top - 34, sw, 30, 8); ctx.fill(); outline(2);
       flatLabel(name, sx, top - 19, 16, '#ffe2b0');
-      tag(`${mstock.cider}/${mktCap()} ${ITEM_NAME.cider.toLowerCase()} · ${mstock.apple}/${mktCap()} ${ITEM_NAME.apple.toLowerCase()}`, sx, top - 50, 13, '#fffaf0');
+      tag(ks.map(k => `${mstock[k]} ${ITEM_NAME[k].toLowerCase()}`).join(' · ') + ` · max ${mktCap()} each`, sx, top - 50, 13, '#fffaf0');
     });
   }
   function drawBunting(by) {
@@ -4579,9 +5000,12 @@
 
   function drawGuide(time) {
     let target = null;
-    const onZone = inRect(DROP, DROP.w, DROP.d) || inRect(SAW_IN, SAW_IN.w, SAW_IN.d) || inRect(SHACK_IN, SHACK_IN.w, SHACK_IN.d);
+    const onZone = inRect(DROP, DROP.w, DROP.d) || inRect(SAW_IN, SAW_IN.w, SAW_IN.d) || inRect(SHACK_IN, SHACK_IN.w, SHACK_IN.d) ||
+      DROPS.some(D => D.on() && inRect(D.z, D.z.w, D.z.d));
+    const crop = [...stack].reverse().find(k => CROPS.includes(k)), cropTo = crop && workerDrop(crop);
     if (stack.includes('sap') && level.shack && !onZone) target = [SHACK_IN.x, SHACK_IN.y, 30];
-    else if (stack.some(k => k !== 'sap') && !onZone) target = [DROP.x, DROP.y, 30];
+    else if (stack.some(k => k !== 'sap' && !CROPS.includes(k)) && !onZone) target = [DROP.x, DROP.y, 30];
+    else if (cropTo && !onZone) target = [cropTo.z.x, cropTo.z.y, 30];
     else if (pileAmt.store > 0 && !stack.length) target = [PILES.store.x, PILES.store.y, 60];
     else if (!level.drone && !stack.length) {
       const key = ['dock', 'showroom', 'rail', 'harbor', 'village'].find(k => pileAmt[k] > 0);
@@ -4633,8 +5057,10 @@
     const items = [];
     const add = (y, draw) => items.push({ y, draw });
     for (const d of decor) if (onScreen(d.x, d.y, 20)) add(d.y, () => drawDecor(d));
-    for (const n of nodes) if (onScreen(n.x, n.y, 100 * n.size)) add(n.y, () => n.type === 'maple' ? drawMaple(n) : n.type === 'apple' ? drawAppleTree(n) : drawTree(n));
+    for (const n of nodes) if (onScreen(n.x, n.y, 100 * n.size)) add(n.y, () => n.type === 'maple' ? drawMaple(n) : n.type === 'apple' ? drawAppleTree(n) : n.type === 'corn' ? drawCorn(n) : n.type === 'hen' ? drawHen(n) : drawTree(n));
     for (const h of pickers) if (onScreen(h.x, h.y, 60)) add(h.y, () => drawPicker(h));
+    for (const h of hands) if (onScreen(h.x, h.y, 60)) add(h.y, () => drawPicker(h, true));
+    if (level.coop && FARMLAND() && onScreen(COOP.x, COOP.front, 120)) add(COOP.front, drawCoop);
     for (const v of shoppers) if (v.state !== 'away' && onScreen(v.x, v.y, 60)) add(v.y, () => drawShopper(v));
     if (onScreen(MARKET.x, MARKET.front, 300)) add(MARKET.front - 1, drawMarket);
     if (event.kind === 'market') for (const by of [CY + 250, CY + 620]) add(by, () => drawBunting(by));
@@ -4814,16 +5240,16 @@
     m.fillStyle = MAP().ground[2]; m.fillRect(0, 0, size, size);
     const rect = (x0, y0, x1, y1, c) => { m.fillStyle = c; m.fillRect(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k); };
     rect(CX - 1080, CY - 720, CX + 1160, CY + 1160, MAP().plaza);
-    for (const r of ROADS) rect(r.x0, r.y0, r.x1, r.y1, MAP().plaza);
+    for (const r of roadsNow()) rect(r.x0, r.y0, r.x1, r.y1, MAP().plaza);
     rect(SEA.x0, 0, WORLD_W, SEA.y1, MAP().sea);
-    for (const id in DISTRICTS) { const d = DISTRICTS[id]; rect(d.x0, d.y0, d.x1, d.y1, level[id] ? d.ground : 'rgba(30,40,24,.55)'); }
+    for (const id in DISTRICTS) { if (!distOn(id)) continue; const d = DISTRICTS[id]; rect(d.x0, d.y0, d.x1, d.y1, level[id] ? d.ground : 'rgba(30,40,24,.55)'); }
     if (level.market) rect(MARKET.x - MARKET.w / 2, MARKET.front - MARKET.d, MARKET.x + MARKET.w / 2, MARKET.front, '#4f9a4a');
     houses.forEach((h, i) => { if (h.state === 'done') rect(HOUSE_SPOTS[i].x - 40, HOUSE_SPOTS[i].front - 60, HOUSE_SPOTS[i].x + 40, HOUSE_SPOTS[i].front, h.color); });
     const dot = (x, y, r, c) => { m.fillStyle = c; m.beginPath(); m.arc(x * k, y * k, r, 0, Math.PI * 2); m.fill(); };
     dot(STORE.x, STORE.front, 3.5, '#d9644a');
     if (level.warehouse) rect(WH.x0, WH.y0, WH.x1, WH.y1, '#8a3b2e');
     for (const key in PILES) if (pileAmt[key] > 0) dot(PILES[key].x, PILES[key].y, 3, '#7fe08a');
-    for (const g of GROUPS) if (UPGRADES.some(u => u.group === g.id && canBuy(u) && cash >= u.costs[level[u.id]])) dot(g.x, g.y, 2.5, '#fff3a6');
+    for (const g of GROUPS) if (groupOn(g) && UPGRADES.some(u => u.group === g.id && canBuy(u) && cash >= u.costs[level[u.id]])) dot(g.x, g.y, 2.5, '#fff3a6');
     for (const v of vans) dot(v.x, v.y, 1.6, '#fffaf0');
     for (const b of bots) dot(b.x, b.y, 1.6, '#e8b83a');
     // you, and the view
@@ -4858,8 +5284,9 @@
       stats, contract, research, dispatch, prestige: { ...prestige }, vstock: { ...vstock }, builder: { ...builder },
       houses: houses.map(h => ({ s: h.state, p: Math.round(h.p * 100) / 100 })),
       level: { ...level }, paid: { ...paid }, cash, piles: { ...pileAmt }, served,
-      hp: nodes.map(n => n.type === 'maple' ? Math.round(n.sap * 100) / 100 : n.type === 'apple' ? Math.round(n.fruit * 100) / 100 : n.hp),
+      hp: nodes.map(n => n.type === 'maple' ? Math.round(n.sap * 100) / 100 : n.fruit !== undefined ? Math.round(n.fruit * 100) / 100 : n.hp),
       press: { apples: press.apples, out: press.out }, mstock: { ...mstock },
+      grist: { corn: grist.corn, meal: grist.meal }, bakery: { meal: bakery.meal, eggs: bakery.eggs, out: bakery.out }, others: mapSaves,
       grow: nodes.map(n => n.farm ? Math.round((n.grow ?? 1) * 100) / 100 : 1),
       bots: bots.map(b => ({ id: b.id, load: b.load.length })),
     };
@@ -4872,6 +5299,7 @@
     if (!d || !(d.v >= 5)) return false;
     const old = d.v < 9;
     if (!old) { player.x = d.px; player.y = d.py; }
+    for (const k in carried) carried[k] = 0;
     merge(carried, d.carried); merge(stock, d.stock); merge(wh, d.wh); merge(pallet, d.pallet);
     if (d.saw && d.saw.q) { merge(saw.q, d.saw.q); saw.out = d.saw.out; }
     if (d.shack) { shack.sap = d.shack.sap; shack.out = d.shack.out; }
@@ -4886,7 +5314,12 @@
     applyMapTheme();
     if (d.dispatch) { Object.assign(dispatch, d.dispatch); dispatch.reserve = { wood: 0, oak: 0, redwood: 0, ...(d.dispatch.reserve || {}) }; }
     merge(vstock, d.vstock); merge(builder, d.builder);
-    merge(press, d.press); merge(mstock, d.mstock); mpend.press = mpend.cider = mpend.apple = 0; pickers = []; shoppers = [];
+    for (const k in mstock) mstock[k] = 0;
+    for (const o of [press, grist, bakery]) for (const k in o) o[k] = 0;
+    merge(press, d.press); merge(mstock, d.mstock); merge(grist, d.grist); merge(bakery, d.bakery);
+    for (const k in mpend) mpend[k] = 0;
+    pickers = []; shoppers = []; hands = [];
+    if (d.others) mapSaves = d.others;
     merge(level, d.level); merge(paid, d.paid);
     cash = d.cash; served = d.served;
     // upgrades used to be paid off a bit at a time; give back anything that was part-paid
@@ -4898,10 +5331,10 @@
     villagers = [];
     if (d.piles) merge(pileAmt, d.piles); else pileAmt.store = d.pile || 0;
     stack = [];
-    for (const k of ['wood', 'oak', 'redwood', 'sap']) for (let i = 0; i < carried[k]; i++) stack.push(k);
-    ensureYard();
+    for (const k of ['wood', 'oak', 'redwood', 'sap', ...CROPS]) for (let i = 0; i < carried[k]; i++) stack.push(k);
+    makeNodes(); ensureYard();   // rebuild trees from scratch: the last map may have had more yard, orchard or farm
     if (!old && d.hp && d.hp.length === nodes.length) {
-      d.hp.forEach((v, i) => { if (nodes[i].type === 'maple') nodes[i].sap = v; else if (nodes[i].type === 'apple') nodes[i].fruit = v || 0; else { nodes[i].hp = v; nodes[i].grow = d.grow[i]; } });
+      d.hp.forEach((v, i) => { if (nodes[i].type === 'maple') nodes[i].sap = v; else if (nodes[i].fruit !== undefined) nodes[i].fruit = v || 0; else { nodes[i].hp = v; nodes[i].grow = d.grow[i]; } });
     }
     bots = []; ensureBots();
     for (const sb of d.bots || []) {
@@ -4942,15 +5375,16 @@
       const ref = db.doc('data/users/' + id + '/save');
       const snap = await ref.get();
       const d = snap.exists ? snap.data() : null;
-      if (d && d.savedAt > loadedAt) applySave(JSON.parse(d.state));
+      if (d && d.savedAt > loadedAt) { applySave(JSON.parse(d.state)); picker.hidden = true; }
       saveRef = ref;
     } catch (e) { /* no account save in this view; the browser copy still works */ }
   }
 
   function start(saved) {
     resize();
-    FRESH = snapshot();
-    if (!applySave(saved)) applySave(loadLocal());
+    FRESH = JSON.parse(JSON.stringify(snapshot())); delete FRESH.others;   // a deep copy: snapshot() shares live objects like stats
+    const had = applySave(saved) || applySave(loadLocal());
+    if (!had) openPicker(true);
     afterUpgrade();
     updateHud();
     addEventListener('resize', resize);
