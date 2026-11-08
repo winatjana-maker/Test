@@ -1,0 +1,9 @@
+{
+  "name": "tiny-fronts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cartoon turn-based tactics prototype for mobile browsers. Works offline.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

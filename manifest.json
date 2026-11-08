@@ -1,0 +1,11 @@
+{
+  "name": "Tiny Fronts",
+  "short_name": "Tiny Fronts",
+  "description": "Cartoon turn-based tactics. Plays offline.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1e293b",
+  "theme_color": "#1e293b",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

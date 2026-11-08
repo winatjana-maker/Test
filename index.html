@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1e293b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Tiny Fronts</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="hud">
+      <div class="row">
+        <div id="turnLabel" class="pill">Day 1 · Your turn</div>
+        <div id="funds" class="pill funds">Funds 0</div>
+        <button id="menuBtn" class="icon" aria-label="Menu">☰</button>
+      </div>
+      <div class="row">
+        <div class="strike">
+          <div class="label">Air strike</div>
+          <div class="meter"><div id="strikeFill"></div></div>
+        </div>
+        <button id="strikeBtn" disabled>Strike</button>
+        <button id="endBtn" class="primary">End turn</button>
+      </div>
+    </header>
+    <main id="boardWrap">
+      <canvas id="board" aria-label="Game board"></canvas>
+      <div id="toast" aria-live="polite"></div>
+    </main>
+    <footer id="panel">
+      <div id="info"></div>
+      <div id="actions"></div>
+    </footer>
+  </div>
+
+  <div id="overlay" class="hidden" role="dialog" aria-modal="true">
+    <div class="card" id="overlayCard"></div>
+  </div>
+
+  <script src="src/game.js"></script>
+  <script src="src/ai.js"></script>
+  <script src="src/ui.js"></script>
+</body>
+</html>
