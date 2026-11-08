@@ -24,10 +24,7 @@
         if (d[ck] !== 0) continue;
         step = 1; // goal on terrain we can't enter (e.g. a helicopter over water): get next to it
       }
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = cur.x + dx;
-        const ny = cur.y + dy;
-        if (!G.inBounds(state, nx, ny)) continue;
+      for (const { x: nx, y: ny } of G.neighbors(state, cur.x, cur.y)) {
         if (!Number.isFinite(G.moveCost(state, moveType, nx, ny))) continue;
         const nk = G.key(state, nx, ny);
         const nd = d[ck] + step;
@@ -124,25 +121,39 @@
     return best ? best.action : null;
   }
 
+  // Value of buying `type` against the enemy's current army: damage it deals minus damage it takes,
+  // weighted by what the enemy units cost. Pricier units score higher so the AI saves for them.
+  function buildScore(state, p, type, counts) {
+    const enemies = state.units.filter((u) => u.owner !== p);
+    let offense = 0;
+    let defense = 0;
+    let total = 0;
+    for (const e of enemies) {
+      const w = G.UNITS[e.type].cost;
+      offense += G.DAMAGE[type][e.type] * w;
+      defense += G.DAMAGE[e.type][type] * w;
+      total += w;
+    }
+    if (!total) return 0;
+    const net = offense / total - 0.5 * (defense / total);
+    return net * Math.sqrt(G.UNITS[type].cost / 1000) - 12 * (counts[type] || 0);
+  }
+
   function chooseBuild(state, p, funds, counts) {
-    const cost = (t) => G.UNITS[t].cost;
-    const has = (t) => counts[t] || 0;
-    const enemyHelis = state.units.filter((u) => u.owner !== p && u.type === 'heli').length;
-    if (has('infantry') < 3 && funds >= cost('infantry')) return 'infantry';
-    if (enemyHelis > has('heli') && funds >= cost('heli')) return 'heli';
-    const weights = { tank: 2, artillery: 1, heli: 1 };
+    const footSoldiers = (counts.infantry || 0) + (counts.bazooka || 0);
+    if (footSoldiers < 3 && funds >= G.UNITS.infantry.cost) return 'infantry';
     let pick = null;
-    let pickRatio = Infinity;
-    for (const t of Object.keys(weights)) {
-      if (funds < cost(t)) continue;
-      const r = has(t) / weights[t];
-      if (r < pickRatio) {
+    let best = -Infinity;
+    for (const t of G.UNIT_ORDER) {
+      if (funds < G.UNITS[t].cost) continue;
+      const sc = buildScore(state, p, t, counts);
+      if (sc > best) {
+        best = sc;
         pick = t;
-        pickRatio = r;
       }
     }
-    if (pick) return pick;
-    if (has('infantry') < 5 && funds >= cost('infantry')) return 'infantry';
+    if (pick && best > 0) return pick;
+    if (footSoldiers < 5 && funds >= G.UNITS.infantry.cost) return 'infantry';
     return null; // save up
   }
 

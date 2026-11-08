@@ -18,15 +18,16 @@
   ];
 
   const INF = Infinity;
+  const EASY = { foot: 1, tread: 1, wheel: 1, air: 1 };
   const TERRAIN = {
-    plain: { name: 'Plain', def: 1, cost: { foot: 1, tread: 1, air: 1 } },
-    forest: { name: 'Forest', def: 2, cost: { foot: 1, tread: 2, air: 1 } },
-    mountain: { name: 'Mountain', def: 4, cost: { foot: 2, tread: INF, air: 1 } },
-    water: { name: 'Water', def: 0, cost: { foot: INF, tread: INF, air: 1 } },
-    road: { name: 'Road', def: 0, cost: { foot: 1, tread: 1, air: 1 } },
-    city: { name: 'City', def: 3, cost: { foot: 1, tread: 1, air: 1 }, building: true },
-    factory: { name: 'Factory', def: 3, cost: { foot: 1, tread: 1, air: 1 }, building: true },
-    hq: { name: 'HQ', def: 4, cost: { foot: 1, tread: 1, air: 1 }, building: true },
+    plain: { name: 'Plain', def: 1, cost: { foot: 1, tread: 1, wheel: 2, air: 1 } },
+    forest: { name: 'Forest', def: 2, cost: { foot: 1, tread: 2, wheel: 3, air: 1 } },
+    mountain: { name: 'Mountain', def: 4, cost: { foot: 2, tread: INF, wheel: INF, air: 1 } },
+    water: { name: 'Water', def: 0, cost: { foot: INF, tread: INF, wheel: INF, air: 1 } },
+    road: { name: 'Road', def: 0, cost: EASY },
+    city: { name: 'City', def: 3, cost: EASY, building: true },
+    factory: { name: 'Factory', def: 3, cost: EASY, building: true },
+    hq: { name: 'HQ', def: 4, cost: EASY, building: true },
   };
 
   const UNITS = {
@@ -34,6 +35,16 @@
       name: 'Infantry', cost: 1000, move: 3, moveType: 'foot', minRange: 1, maxRange: 1,
       canCapture: true, air: false, indirect: false,
       blurb: 'Cheap. The only unit that can capture buildings.',
+    },
+    bazooka: {
+      name: 'Bazooka', cost: 3000, move: 2, moveType: 'foot', minRange: 1, maxRange: 1,
+      canCapture: true, air: false, indirect: false,
+      blurb: 'Slow foot soldier with a rocket. Beats tanks. Can capture.',
+    },
+    jeep: {
+      name: 'Jeep', cost: 4000, move: 8, moveType: 'wheel', minRange: 1, maxRange: 1,
+      canCapture: false, air: false, indirect: false,
+      blurb: 'Very fast on roads. Good against infantry, weak against armor.',
     },
     tank: {
       name: 'Tank', cost: 7000, move: 6, moveType: 'tread', minRange: 1, maxRange: 1,
@@ -43,7 +54,12 @@
     artillery: {
       name: 'Artillery', cost: 6000, move: 5, moveType: 'tread', minRange: 2, maxRange: 3,
       canCapture: false, air: false, indirect: true,
-      blurb: 'Fires 2–3 tiles away. Can’t move and fire in one turn. Can’t hit air.',
+      blurb: 'Fires 2–3 hexes away. Can’t move and fire in one turn. Can’t hit air.',
+    },
+    flak: {
+      name: 'Flak', cost: 8000, move: 6, moveType: 'tread', minRange: 1, maxRange: 1,
+      canCapture: false, air: false, indirect: false,
+      blurb: 'Anti-air truck. Shreds helicopters and infantry. Weak against tanks.',
     },
     heli: {
       name: 'Helicopter', cost: 9000, move: 6, moveType: 'air', minRange: 1, maxRange: 1,
@@ -51,15 +67,24 @@
       blurb: 'Flies over anything. Strong against tanks. Ignores terrain cover.',
     },
   };
-  const UNIT_ORDER = ['infantry', 'tank', 'artillery', 'heli'];
+  const UNIT_ORDER = ['infantry', 'bazooka', 'jeep', 'tank', 'artillery', 'flak', 'heli'];
 
   // Base damage (% of a full-health target) by attacker → defender.
-  const DAMAGE = {
-    infantry: { infantry: 55, tank: 5, artillery: 15, heli: 7 },
-    tank: { infantry: 75, tank: 55, artillery: 70, heli: 10 },
-    artillery: { infantry: 90, tank: 70, artillery: 75, heli: 0 },
-    heli: { infantry: 75, tank: 65, artillery: 65, heli: 55 },
+  const DAMAGE_TABLE = {
+    //          inf  baz  jeep tank  art flak heli
+    infantry: [55, 45, 12, 5, 15, 5, 7],
+    bazooka: [65, 55, 85, 55, 70, 65, 9],
+    jeep: [70, 65, 35, 6, 45, 10, 12],
+    tank: [75, 70, 85, 55, 70, 75, 10],
+    artillery: [90, 85, 80, 70, 75, 75, 0],
+    flak: [90, 80, 50, 20, 50, 45, 110],
+    heli: [75, 75, 75, 65, 65, 25, 55],
   };
+  const DAMAGE = {};
+  for (const atk of UNIT_ORDER) {
+    DAMAGE[atk] = {};
+    UNIT_ORDER.forEach((d, i) => { DAMAGE[atk][d] = DAMAGE_TABLE[atk][i]; });
+  }
 
   // Map legend. Owner: 0 = Blue (player), 1 = Orange (computer), null = neutral.
   const LEGEND = {
@@ -99,12 +124,35 @@
     },
   ];
 
-  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  const STRIKE_TILES = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
+  // ---------- hex grid ----------
+  // Pointy-top hexes in "odd-r" layout: odd rows are shifted half a hex to the right.
+  const NEIGHBORS_EVEN = [[1, 0], [-1, 0], [0, -1], [-1, -1], [0, 1], [-1, 1]];
+  const NEIGHBORS_ODD = [[1, 0], [-1, 0], [1, -1], [0, -1], [1, 1], [0, 1]];
+
+  function neighbors(state, x, y) {
+    const dirs = y & 1 ? NEIGHBORS_ODD : NEIGHBORS_EVEN;
+    const out = [];
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (inBounds(state, nx, ny)) out.push({ x: nx, y: ny });
+    }
+    return out;
+  }
+
+  function toCube(x, y) {
+    const q = x - (y - (y & 1)) / 2;
+    return { q, r: y, s: -q - y };
+  }
+
+  function dist(ax, ay, bx, by) {
+    const a = toCube(ax, ay);
+    const b = toCube(bx, by);
+    return Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.s - b.s));
+  }
 
   // ---------- helpers ----------
   const key = (state, x, y) => y * state.w + x;
-  const dist = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
   const displayHp = (hp) => Math.ceil(hp / 10);
   const inBounds = (state, x, y) => x >= 0 && y >= 0 && x < state.w && y < state.h;
   const terrainAt = (state, x, y) => TERRAIN[state.terrain[y][x]];
@@ -166,10 +214,7 @@
       const cur = frontier.shift();
       const ck = key(state, cur.x, cur.y);
       if (all.get(ck).cost < cur.cost) continue;
-      for (const [dx, dy] of DIRS) {
-        const nx = cur.x + dx;
-        const ny = cur.y + dy;
-        if (!inBounds(state, nx, ny)) continue;
+      for (const { x: nx, y: ny } of neighbors(state, cur.x, cur.y)) {
         const c = moveCost(state, def.moveType, nx, ny);
         if (!Number.isFinite(c)) continue;
         const occ = unitAt(state, nx, ny);
@@ -363,8 +408,9 @@
   }
 
   // ---------- air strike ----------
+  // The target hex plus its 6 neighbors.
   function strikeTiles(state, x, y) {
-    return STRIKE_TILES.map(([dx, dy]) => ({ x: x + dx, y: y + dy })).filter((p) => inBounds(state, p.x, p.y));
+    return inBounds(state, x, y) ? [{ x, y }, ...neighbors(state, x, y)] : [];
   }
 
   function strikeDamage(unit) {
@@ -419,7 +465,7 @@
   const api = {
     CAPTURE_POINTS, INCOME, HEAL, STRIKE_MAX, STRIKE_DAMAGE,
     PLAYERS, TERRAIN, UNITS, UNIT_ORDER, DAMAGE, MAPS,
-    key, dist, displayHp, inBounds, terrainAt, unitAt, getUnit, buildingAt, moveCost, defenseAt,
+    key, dist, neighbors, displayHp, inBounds, terrainAt, unitAt, getUnit, buildingAt, moveCost, defenseAt,
     createGame, reachable, pathTo, attackTargets, previewAttack, canCapture,
     performAction, buildUnit, strikeTiles, strikeDamage, useStrike, endTurn,
   };

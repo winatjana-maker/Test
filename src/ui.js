@@ -81,7 +81,7 @@
     ui.mode = 'selected';
     ui.sel = { unitId: u.id, reach, danger: dangerTiles(u, reach), dest: null };
     ui.cursor = { x: u.x, y: u.y };
-    setPanel(unitInfo(u) + '<div class="muted">Tap a blue tile to move, or tap the unit again to stay.</div>', [
+    setPanel(unitInfo(u) + '<div class="muted">Tap a blue hex to move, or tap the unit again to stay.</div>', [
       { label: 'Cancel', onClick: () => { clearSelection(); showIdle(); } },
     ]);
   }
@@ -102,11 +102,12 @@
     const spots = def.indirect ? [{ x: u.x, y: u.y }] : [...reach.tiles.values()];
     for (const s of spots) {
       for (let dy = -def.maxRange; dy <= def.maxRange; dy++) {
-        for (let dx = -def.maxRange; dx <= def.maxRange; dx++) {
-          const d = Math.abs(dx) + Math.abs(dy);
+        for (let dx = -def.maxRange - 1; dx <= def.maxRange + 1; dx++) {
           const x = s.x + dx;
           const y = s.y + dy;
-          if (d >= def.minRange && d <= def.maxRange && G.inBounds(state, x, y)) out.add(key(x, y));
+          if (!G.inBounds(state, x, y)) continue;
+          const d = G.dist(s.x, s.y, x, y);
+          if (d >= def.minRange && d <= def.maxRange) out.add(key(x, y));
         }
       }
     }
@@ -200,24 +201,27 @@
     ui.mode = 'build';
     ui.cursor = { x: b.x, y: b.y };
     const funds = state.players[HUMAN].funds;
-    const grid = document.createElement('div');
-    grid.className = 'build-grid';
+    const close = () => { hideOverlay(); clearSelection(); showIdle(); };
+    showOverlay(`<h1>Build</h1><p>Funds <b>${fmt(funds)}</b>. New units can act next turn.</p>`, [
+      { label: 'Close', onClick: close },
+    ]);
+    const list = document.createElement('div');
+    list.className = 'build-list';
     for (const type of G.UNIT_ORDER) {
       const def = G.UNITS[type];
       const btn = document.createElement('button');
       btn.disabled = funds < def.cost;
-      btn.innerHTML = `<span>${def.name}</span><span class="cost">${fmt(def.cost)}</span>`;
+      btn.innerHTML = `<span class="name">${def.name}<span class="cost">${fmt(def.cost)}</span></span><span class="blurb">${def.blurb}</span>`;
       btn.onclick = () => {
         G.buildUnit(state, b.x, b.y, type);
         popup(b.x, b.y, 'New!', '#bbf7d0');
-        clearSelection();
-        showIdle();
+        close();
         updateHud();
       };
-      grid.appendChild(btn);
+      list.appendChild(btn);
     }
-    setPanel(`<div class="title">Build a unit</div><div class="muted">Funds ${fmt(funds)}. New units can act next turn.</div>`, []);
-    $('actions').appendChild(grid);
+    const card = $('overlayCard');
+    card.insertBefore(list, card.querySelector('.buttons'));
   }
 
   // ---------- air strike ----------
@@ -226,7 +230,7 @@
     clearSelection();
     ui.mode = 'strike';
     setPanel(
-      `<div class="title">Air strike</div><div class="muted">Hits a plus-shaped area for ${G.STRIKE_DAMAGE}% damage. Never destroys a unit. Tap a tile to aim, tap again to fire.</div>`,
+      `<div class="title">Air strike</div><div class="muted">Hits a hex and the 6 around it for ${G.STRIKE_DAMAGE}% damage. Never destroys a unit. Tap a hex to aim, tap again to fire.</div>`,
       [{ label: 'Cancel', onClick: () => { clearSelection(); showIdle(); } }]
     );
   }
@@ -418,7 +422,7 @@
       `<h1>Tiny Fronts</h1>
       <h2>How to play</h2>
       <ul>
-        <li>Tap a unit, then a blue tile to move. Then pick <b>Attack</b>, <b>Capture</b> or <b>Wait</b>.</li>
+        <li>Tap a unit, then a blue hex to move. Then pick <b>Attack</b>, <b>Capture</b> or <b>Wait</b>.</li>
         <li>Infantry capture cities, factories and HQs. Each building you own pays ${fmt(G.INCOME)} a turn.</li>
         <li>Tap your factory to build new units.</li>
         <li>Damaged units hit softer. Forests, cities and mountains give cover (stars).</li>
@@ -444,25 +448,27 @@
 
   function animatePath(id, path) {
     return new Promise((resolve) => {
-      const last = path[path.length - 1];
-      if (path.length <= 1) {
-        ui.display[id] = { x: last.x, y: last.y };
+      const pts = path.map((p) => center(p.x, p.y));
+      const last = pts[pts.length - 1];
+      if (pts.length <= 1) {
+        ui.display[id] = last;
         return resolve();
       }
       const per = 70;
       const total = per * (path.length - 1);
       const t0 = performance.now();
       const step = (now) => {
-        const t = Math.min(1, (now - t0) / total);
+        // rAF timestamps can be slightly earlier than t0, so clamp to 0.
+        const t = Math.max(0, Math.min(1, (now - t0) / total));
         const f = t * (path.length - 1);
         const i = Math.min(path.length - 2, Math.floor(f));
         const r = f - i;
-        const a = path[i];
-        const b = path[i + 1];
+        const a = pts[i];
+        const b = pts[i + 1];
         ui.display[id] = { x: a.x + (b.x - a.x) * r, y: a.y + (b.y - a.y) * r };
         if (t < 1) requestAnimationFrame(step);
         else {
-          ui.display[id] = { x: last.x, y: last.y };
+          ui.display[id] = last;
           resolve();
         }
       };
@@ -477,16 +483,58 @@
     road: '#ead9a8', roadEdge: '#d6c18a', neutral: '#cbd5e1', neutralDark: '#64748b',
   };
 
+  // ---------- hex geometry ----------
+  // Pointy-top hexes, odd rows shifted right. `tile` is a hex's width; `hexR` its corner radius.
+  const SQRT3 = Math.sqrt(3);
+  let hexR = tile / SQRT3;
+  const boardW = () => tile * (state.w + 0.5);
+  const boardH = () => hexR * (1.5 * (state.h - 1) + 2);
+
+  function center(x, y) {
+    return { x: tile * (x + 0.5 + (y & 1) * 0.5), y: hexR + y * 1.5 * hexR };
+  }
+
+  function hexPath(cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 180) * (60 * i - 90);
+      const px = cx + r * Math.cos(a);
+      const py = cy + r * Math.sin(a);
+      if (i) ctx.lineTo(px, py);
+      else ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function pixelToHex(px, py) {
+    const x = px - tile / 2;
+    const y = py - hexR;
+    const fq = ((SQRT3 / 3) * x - y / 3) / hexR;
+    const fr = ((2 / 3) * y) / hexR;
+    const fs = -fq - fr;
+    let q = Math.round(fq);
+    let r = Math.round(fr);
+    const s = Math.round(fs);
+    const dq = Math.abs(q - fq);
+    const dr = Math.abs(r - fr);
+    const ds = Math.abs(s - fs);
+    if (dq > dr && dq > ds) q = -r - s;
+    else if (dr > ds) r = -q - s;
+    return { x: q + (r - (r & 1)) / 2, y: r };
+  }
+
   function resize() {
     const wrap = $('boardWrap');
     const availW = wrap.clientWidth - 4;
     const availH = wrap.clientHeight - 12;
-    tile = Math.max(22, Math.floor(Math.min(availW / state.w, availH / state.h)));
+    const hFactor = (1.5 * (state.h - 1) + 2) / SQRT3; // board height per unit of hex width
+    tile = Math.max(22, Math.floor(Math.min(availW / (state.w + 0.5), availH / hFactor)));
+    hexR = tile / SQRT3;
     dpr = window.devicePixelRatio || 1;
-    canvas.style.width = `${tile * state.w}px`;
-    canvas.style.height = `${tile * state.h}px`;
-    canvas.width = Math.round(tile * state.w * dpr);
-    canvas.height = Math.round(tile * state.h * dpr);
+    canvas.style.width = `${boardW()}px`;
+    canvas.style.height = `${boardH()}px`;
+    canvas.width = Math.round(boardW() * dpr);
+    canvas.height = Math.round(boardH() * dpr);
   }
 
   function roundRect(x, y, w, h, r) {
@@ -499,18 +547,23 @@
     ctx.closePath();
   }
 
+  const roadLike = (x, y) => state.terrain[y][x] === 'road' || !!G.buildingAt(state, x, y);
+
   function drawTile(x, y, now) {
     const t = state.terrain[y][x];
     const s = tile;
-    const px = x * s;
-    const py = y * s;
-    const base = (x + y) % 2 ? COLORS.plain : COLORS.plain2;
-    ctx.fillStyle = base;
-    ctx.fillRect(px, py, s, s);
+    const c = center(x, y);
+    const px = c.x - s / 2;
+    const py = c.y - s / 2;
+
+    ctx.save();
+    hexPath(c.x, c.y, hexR + 0.5);
+    ctx.clip();
+    const fill = { forest: COLORS.forest, water: COLORS.water }[t] || ((x + y) % 2 ? COLORS.plain : COLORS.plain2);
+    ctx.fillStyle = fill;
+    ctx.fillRect(px - 2, c.y - hexR - 2, s + 4, hexR * 2 + 4);
 
     if (t === 'forest') {
-      ctx.fillStyle = COLORS.forest;
-      ctx.fillRect(px, py, s, s);
       for (const [ox, oy, r] of [[0.3, 0.4, 0.2], [0.7, 0.35, 0.18], [0.5, 0.7, 0.22]]) {
         ctx.fillStyle = COLORS.treeDark;
         ctx.beginPath();
@@ -542,8 +595,6 @@
       ctx.lineTo(px + s * 0.5, py + s * 0.3);
       ctx.fill();
     } else if (t === 'water') {
-      ctx.fillStyle = COLORS.water;
-      ctx.fillRect(px, py, s, s);
       ctx.strokeStyle = COLORS.wave;
       ctx.lineWidth = Math.max(1.5, s * 0.05);
       ctx.lineCap = 'round';
@@ -556,19 +607,33 @@
         ctx.stroke();
       }
     } else if (t === 'road') {
-      ctx.fillStyle = COLORS.road;
-      ctx.fillRect(px + s * 0.18, py, s * 0.64, s);
-      ctx.fillStyle = COLORS.roadEdge;
-      ctx.fillRect(px + s * 0.18, py, s * 0.05, s);
-      ctx.fillRect(px + s * 0.77, py, s * 0.05, s);
+      // Draw a road arm toward every neighboring road or building.
+      const arms = G.neighbors(state, x, y).filter((n) => roadLike(n.x, n.y)).map((n) => center(n.x, n.y));
+      ctx.lineCap = 'round';
+      for (const [color, width] of [[COLORS.roadEdge, 0.42], [COLORS.road, 0.32]]) {
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = s * width;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, (s * width) / 2, 0, Math.PI * 2);
+        ctx.fill();
+        for (const n of arms) {
+          ctx.beginPath();
+          ctx.moveTo(c.x, c.y);
+          ctx.lineTo((c.x + n.x) / 2, (c.y + n.y) / 2);
+          ctx.stroke();
+        }
+      }
     }
+    ctx.restore();
 
     const b = G.buildingAt(state, x, y);
     if (b) drawBuilding(b, px, py, s);
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+    hexPath(c.x, c.y, hexR - 0.5);
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(px + 0.5, py + 0.5, s - 1, s - 1);
+    ctx.stroke();
   }
 
   function drawBuilding(b, px, py, s) {
@@ -643,12 +708,12 @@
   }
 
   function drawUnit(u, now) {
-    const pos = ui.display[u.id] || u;
+    const pos = ui.display[u.id] || center(u.x, u.y);
     const s = tile;
     const pl = G.PLAYERS[u.owner];
     const def = G.UNITS[u.type];
-    const cx = pos.x * s + s / 2;
-    let cy = pos.y * s + s / 2;
+    const cx = pos.x;
+    let cy = pos.y;
     const r = s * 0.3;
     if (def.air) cy -= s * 0.08 + Math.sin(now / 250 + u.id) * s * 0.03;
 
@@ -658,7 +723,7 @@
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     ctx.beginPath();
-    ctx.ellipse(pos.x * s + s / 2, pos.y * s + s * 0.86, s * 0.3, s * 0.08, 0, 0, Math.PI * 2);
+    ctx.ellipse(pos.x, pos.y + s * 0.36, s * 0.3, s * 0.08, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // token
@@ -752,6 +817,49 @@
       ctx.beginPath();
       ctx.arc(-r * 0.25, r * 0.35, r * 0.32, 0, Math.PI * 2);
       ctx.fill();
+    } else if (type === 'bazooka') {
+      ctx.beginPath();
+      ctx.arc(-r * 0.15, -r * 0.42, r * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.65, r * 0.62);
+      ctx.quadraticCurveTo(-r * 0.15, -r * 0.35, r * 0.35, r * 0.62);
+      ctx.fill();
+      // rocket tube over the shoulder
+      ctx.lineWidth = r * 0.26;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.75, r * 0.1);
+      ctx.lineTo(r * 0.85, -r * 0.3);
+      ctx.stroke();
+    } else if (type === 'jeep') {
+      roundRect(-r * 0.85, -r * 0.1, r * 1.7, r * 0.5, r * 0.15);
+      ctx.fill();
+      ctx.lineWidth = r * 0.14;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.2, -r * 0.1);
+      ctx.lineTo(r * 0.1, -r * 0.5);
+      ctx.moveTo(-r * 0.4, -r * 0.3);
+      ctx.lineTo(r * 0.5, -r * 0.3);
+      ctx.stroke();
+      for (const wx of [-0.5, 0.5]) {
+        ctx.beginPath();
+        ctx.arc(wx * r, r * 0.5, r * 0.24, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (type === 'flak') {
+      roundRect(-r * 0.8, r * 0.1, r * 1.6, r * 0.5, r * 0.25);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-r * 0.1, r * 0.05, r * 0.3, Math.PI, 0);
+      ctx.fill();
+      // twin barrels pointing up
+      ctx.lineWidth = r * 0.13;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.15, 0);
+      ctx.lineTo(r * 0.35, -r * 0.75);
+      ctx.moveTo(r * 0.05, r * 0.05);
+      ctx.lineTo(r * 0.6, -r * 0.6);
+      ctx.stroke();
     } else {
       ctx.beginPath();
       ctx.ellipse(-r * 0.1, r * 0.15, r * 0.52, r * 0.34, 0, 0, Math.PI * 2);
@@ -777,7 +885,9 @@
     for (const k of keys) {
       const x = k % state.w;
       const y = Math.floor(k / state.w);
-      ctx.fillRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
+      const c = center(x, y);
+      hexPath(c.x, c.y, hexR * 0.94);
+      ctx.fill();
     }
   }
 
@@ -802,7 +912,8 @@
       const p = ui.cursor;
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = Math.max(2, tile * 0.07);
-      roundRect(p.x * tile + 2, p.y * tile + 2, tile - 4, tile - 4, tile * 0.18);
+      const c = center(p.x, p.y);
+      hexPath(c.x, c.y, hexR * 0.9);
       ctx.stroke();
     }
   }
@@ -813,8 +924,9 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const o of ui.targets) {
-      const x = o.target.x * tile + tile / 2;
-      const y = o.target.y * tile + tile * 0.12;
+      const c = center(o.target.x, o.target.y);
+      const x = c.x;
+      const y = c.y - tile * 0.4;
       const txt = `${Math.min(o.preview.damage, o.target.hp)}%`;
       ctx.fillStyle = '#7f1d1d';
       roundRect(x - tile * 0.34, y - tile * 0.14, tile * 0.68, tile * 0.28, tile * 0.1);
@@ -831,7 +943,8 @@
       ctx.globalAlpha = 1 - t;
       ctx.fillStyle = f.color;
       ctx.beginPath();
-      ctx.arc(f.x * tile + tile / 2, f.y * tile + tile / 2, tile * (0.3 + t * 0.4), 0, Math.PI * 2);
+      const c = center(f.x, f.y);
+      ctx.arc(c.x, c.y, tile * (0.3 + t * 0.4), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -842,8 +955,9 @@
     ctx.lineJoin = 'round';
     for (const p of ui.popups) {
       const t = (now - p.t0) / 1100;
-      const x = p.x * tile + tile / 2;
-      const y = p.y * tile + tile * 0.3 - t * tile * 0.6;
+      const c = center(p.x, p.y);
+      const x = c.x;
+      const y = c.y - tile * 0.2 - t * tile * 0.6;
       ctx.globalAlpha = Math.min(1, 2 - t * 2);
       ctx.lineWidth = tile * 0.1;
       ctx.strokeStyle = '#0f172a';
@@ -856,10 +970,11 @@
 
   function draw(now) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, state.w * tile, state.h * tile);
+    ctx.clearRect(0, 0, boardW(), boardH());
     for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) drawTile(x, y, now);
     drawOverlays(now);
-    const units = [...state.units].sort((a, b) => (ui.display[a.id] || a).y - (ui.display[b.id] || b).y);
+    const yOf = (u) => (ui.display[u.id] || center(u.x, u.y)).y;
+    const units = [...state.units].sort((a, b) => yOf(a) - yOf(b));
     for (const u of units) drawUnit(u, now);
     drawTargetLabels();
     drawEffects(now);
@@ -873,8 +988,7 @@
   // ---------- wiring ----------
   canvas.addEventListener('pointerup', (e) => {
     const r = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - r.left) / tile);
-    const y = Math.floor((e.clientY - r.top) / tile);
+    const { x, y } = pixelToHex(e.clientX - r.left, e.clientY - r.top);
     if (G.inBounds(state, x, y)) handleTap(x, y);
   });
   $('endBtn').addEventListener('click', endTurn);

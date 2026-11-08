@@ -20,6 +20,39 @@ test('map loads with income on first turn', () => {
   assert.strictEqual(s.players[1].funds, 0);
 });
 
+test('hex distance and neighbors', () => {
+  const s = newGame();
+  assert.strictEqual(G.neighbors(s, 4, 6).length, 6);
+  assert.strictEqual(G.neighbors(s, 0, 0).length, 2);
+  // even row (4,6): neighbors include (3,5) and (4,5); odd row (4,5): include (4,4) and (5,4)
+  assert.strictEqual(G.dist(4, 6, 3, 5), 1);
+  assert.strictEqual(G.dist(4, 6, 5, 5), 2);
+  assert.strictEqual(G.dist(4, 5, 5, 4), 1);
+  assert.strictEqual(G.dist(0, 0, 0, 4), 4);
+  assert.strictEqual(G.dist(0, 0, 3, 0), 3);
+  for (const n of G.neighbors(s, 3, 7)) assert.strictEqual(G.dist(3, 7, n.x, n.y), 1);
+});
+
+test('every unit has a full damage row', () => {
+  for (const a of G.UNIT_ORDER) for (const d of G.UNIT_ORDER) assert.ok(Number.isFinite(G.DAMAGE[a][d]), a + d);
+});
+
+test('jeeps fly on roads but cannot climb mountains', () => {
+  const s = tinyGame(['=====m', '......'], [
+    { type: 'jeep', owner: 0, x: 0, y: 0 },
+    { type: 'infantry', owner: 1, x: 5, y: 1 },
+  ]);
+  const r = G.reachable(s, s.units[0]);
+  assert.ok(r.tiles.has(G.key(s, 4, 0)));
+  assert.ok(!r.tiles.has(G.key(s, 5, 0)));
+});
+
+test('flak beats helicopters, bazooka beats tanks', () => {
+  assert.ok(G.DAMAGE.flak.heli > G.DAMAGE.heli.flak);
+  assert.ok(G.DAMAGE.bazooka.tank > G.DAMAGE.tank.bazooka * 0.7);
+  assert.ok(G.DAMAGE.jeep.infantry > G.DAMAGE.infantry.jeep);
+});
+
 test('movement respects terrain and blocks on enemies', () => {
   const s = tinyGame(['.m~..', '.....'], [
     { type: 'tank', owner: 0, x: 0, y: 0 },
@@ -110,7 +143,7 @@ test('air strike needs a full meter and never kills', () => {
   s.players[0].strike = G.STRIKE_MAX;
   s.units[2].hp = 15;
   const hits = G.useStrike(s, 1, 0);
-  assert.strictEqual(hits.length, 2);
+  assert.strictEqual(hits.length, 2); // strike covers the hex and its neighbors
   assert.strictEqual(s.units[1].hp, 70);
   assert.strictEqual(s.units[2].hp, 10);
   assert.strictEqual(s.units[0].hp, 100, 'own units unharmed');
@@ -146,7 +179,9 @@ test('computer vs computer games finish without rule errors', () => {
       for (const b of AI.planBuilds(s)) G.buildUnit(s, b.x, b.y, b.type);
       G.endTurn(s);
     }
-    results.push({ winner: s.winner, reason: s.winReason, day: s.day });
+    const bought = {};
+    for (const u of s.units) bought[u.type] = (bought[u.type] || 0) + 1;
+    results.push({ winner: s.winner, reason: s.winReason, day: s.day, alive: bought });
   }
   console.log('AI vs AI:', JSON.stringify(results));
   assert.ok(results.some((r) => r.winner !== null), 'at least one game should reach a result');
