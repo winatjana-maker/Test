@@ -160,6 +160,7 @@
     { id: 'truck', group: 'machines', name: 'Logging Truck', hire: 'Buy Logging Truck', costs: [600, 900, 1500, 4000], note: 'Hauls 40+ logs, loves redwood', more: 'Faster, hauls more' },
     { id: 'trucks', group: 'machines', name: 'Truck Fleet', hire: 'Add Logging Truck', costs: [5000, 10000], note: '+1 logging truck', needs: 'truck' },
     { id: 'drone', group: 'machines', name: 'Cash Drone', hire: 'Buy Cash Drone', costs: [2500, 5000], note: 'Collects cash for you', more: 'Faster drone' },
+    { id: 'bank', group: 'machines', name: 'Bank Account', hire: 'Open a Bank Account', costs: [50000], note: 'Every sale goes straight into your cash. No more cash piles to collect' },
     // tree yard
     { id: 'farm', group: 'farm', name: 'Tree Yard', hire: 'Build Tree Yard', costs: [60, 200, 450, 1500], note: 'Pine & oak that grow back', more: 'More rows, faster growth' },
     // maple & syrup
@@ -839,6 +840,7 @@
     if (total <= 0) return;
     income.push([performance.now(), total]);
     stats.earned += total;
+    if (level.bank) { cash += total; updateHud('cash'); return; }   // the bank deposits it: no pile, no trip
     const n = Math.min(total, 30), base = Math.floor(total / n), rem = total - base * n;
     for (let k = 0; k < n; k++) {
       const amt = base + (k < rem ? 1 : 0);
@@ -1687,6 +1689,13 @@
 
   // Cash drone: flies to the fullest cash pile you're not standing at and brings the money to you.
   function updateDrone(dt) {
+    // with a bank account, anything still sitting in a pile (or in the drone) is deposited
+    if (level.bank) {
+      let swept = drone.load;
+      for (const k in pileAmt) { swept += pileAmt[k]; pileAmt[k] = 0; }
+      drone.load = 0; drone.state = 'idle';
+      if (swept > 0) { cash += swept; updateHud('cash'); }
+    }
     if (!level.drone) return;
     const spd = [0, 520, 900][level.drone];
     if (drone.state === 'idle') {
@@ -1697,13 +1706,14 @@
       if (key) { drone.target = key; drone.state = 'go'; }
     } else if (drone.state === 'go') {
       const p = PILES[drone.target];
-      if (moveEntity(drone, p.x, p.y, spd, dt) < 4) { drone.state = 'grab'; drone.t = 0; }
+      if (moveEntity(drone, p.x, p.y, spd, dt) < 4) { drone.state = 'grab'; drone.t = 0; drone.grab = 0; }
     } else if (drone.state === 'grab') {
-      drone.t += dt;
+      drone.t += dt; drone.grab = (drone.grab || 0) + dt;
       if (drone.t >= 0.03) {
         drone.t = 0;
         const k = drone.target;
-        if (pileAmt[k] <= 0) { drone.state = 'back'; return; }
+        // head back once the pile is empty, or after a second and a half even if money keeps landing on it
+        if (pileAmt[k] <= 0 || drone.grab > 1.5) { drone.state = 'back'; return; }
         const take = Math.max(1, Math.ceil(pileAmt[k] / 30));
         pileAmt[k] -= take; drone.load += take;
         fly('cash', () => pileTop(k), droneSpot, 0.2, null, 10);

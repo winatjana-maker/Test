@@ -41,6 +41,11 @@ Read this first when picking the project back up.
 - Sell & Move wipes the current map's town and goes to the next map (its saved town if it has one, else a fresh one from `FRESH`, a deep copy taken at startup), keeping finished Research levels, the Dispatch Office and its settings, and `prestige` {map, bonus, moves}. The bonus multiplies `incomeMul()`.
 - Ideas not built yet: a third/fourth map (desert, mountain valley), map-specific buildings or mechanics, a bigger map per move.
 
+## Cash drone and Bank Account
+
+- Cash drone (`updateDrone`): flies to the fullest pile, scoops for at most 1.5 s (`drone.grab`), then brings it to you. Before, it could scoop forever when money landed faster than it took it.
+- **Bank Account** (`bank`, Machines tile, $50,000): `payBills` adds money straight to `cash` (no pile), and anything left in piles or the drone is deposited.
+
 ## Map events, orchard and Market Hall
 
 - **Events** (`EVENTS`, `event`, `updateEvent`): one per map, every ~2.5–4 min once $300 is earned, ~45 s long, banner `#chip-event` at the bottom.
